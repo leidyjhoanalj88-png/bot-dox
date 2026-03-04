@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SYS//PANEL v2.0</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #0d1225;
+    --bg3: #111827;
+    --border: #1e2d4a;
+    --accent: #00e5cc;
+    --accent2: #0099ff;
+    --danger: #ff3b5c;
+    --success: #00e5a0;
+    --text: #c8d8f0;
+    --text2: #6b83a8;
+    --glow: 0 0 10px rgba(0,229,204,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  .header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+    font-size: 18px;
+    letter-spacing: 2px;
+    text-shadow: var(--glow);
+  }
+
+  .logo span { color: var(--text2); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+  }
+
+  .clock { color: var(--accent); }
+  .region { color: var(--text2); }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    padding: 0 20px;
+  }
+
+  .tab {
+    padding: 12px 20px;
+    cursor: pointer;
+    color: var(--text2);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* MAIN */
+  .main { padding: 20px; max-width: 1000px; margin: 0 auto; }
+
+  /* SECTION */
+  .section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .section.active { display: block; }
+
+  .section-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    font-size: 13px;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: var(--glow);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .section-body { padding: 20px; }
+
+  /* INPUTS */
+  .form-group { margin-bottom: 16px; }
+
+  label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--text2);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+
+  input, select, textarea {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(0,229,204,0.2);
+  }
+
+  input::placeholder { color: var(--text2); }
+
+  .row { display: flex; gap: 12px; }
+  .row .form-group { flex: 1; }
+
+  /* BUTTONS */
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #00fff5; box-shadow: var(--glow); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+  }
+  .btn-danger:hover { background: rgba(255,59,92,0.1); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--accent2);
+    border: 1px solid var(--accent2);
+  }
+  .btn-secondary:hover { background: rgba(0,153,255,0.1); }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    color: var(--text2);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(30,45,74,0.5);
+    vertical-align: middle;
+  }
+
+  tr:hover td { background: rgba(0,229,204,0.03); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .badge-success { background: rgba(0,229,160,0.15); color: var(--success); }
+  .badge-danger { background: rgba(255,59,92,0.15); color: var(--danger); }
+  .badge-info { background: rgba(0,153,255,0.15); color: var(--accent2); }
+
+  .cc-link { color: var(--accent); cursor: pointer; font-family: 'Share Tech Mono', monospace; font-size: 13px; }
+  .cc-link:hover { text-decoration: underline; }
+
+  /* RESULT BOX */
+  .result-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    min-height: 80px;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  .result-box .label { color: var(--text2); }
+  .result-box .value { color: var(--accent); }
+
+  /* STATS */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .stat-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 28px;
+    color: var(--accent);
+    text-shadow: var(--glow);
+  }
+
+  .stat-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--text2);
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ALERT */
+  .alert {
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    display: none;
+  }
+
+  .alert-success { background: rgba(0,229,160,0.1); border: 1px solid var(--success); color: var(--success); }
+  .alert-danger { background: rgba(255,59,92,0.1); border: 1px solid var(--danger); color: var(--danger); }
+  .alert.show { display: block; }
+
+  /* LOGIN */
+  .login-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+  }
+
+  .login-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 40px;
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .login-logo {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+    font-size: 22px;
+    letter-spacing: 3px;
+    text-align: center;
+    margin-bottom: 8px;
+    text-shadow: var(--glow);
+  }
+
+  .login-sub {
+    text-align: center;
+    color: var(--text2);
+    font-size: 13px;
+    letter-spacing: 1px;
+    margin-bottom: 30px;
+  }
+
+  .scan-line {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scan 3s linear infinite;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100vh; }
+  }
+</style>
+</head>
+<body>
+
+<div class="scan-line"></div>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="loginWrap">
+  <div class="login-box">
+    <div class="login-logo">SYS//PANEL</div>
+    <div class="login-sub">v2.0 · ACCESO RESTRINGIDO</div>
+    <div id="loginAlert" class="alert alert-danger">Contraseña incorrecta</div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">INGRESAR</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+
+  <div class="header">
+    <div class="logo">SYS//<span>/</span>PANEL <span style="font-size:12px;margin-left:8px">v2.0</span></div>
+    <div class="header-right">
+      <span class="clock" id="clock">00:00:00</span>
+      <span class="region">COL/BOG</span>
+      <button class="btn btn-danger" style="padding:6px 14px;font-size:12px" onclick="logout()">SALIR</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('cedula')">🔍 Cédula</div>
+    <div class="tab" onclick="showTab('keys')">🔑 Licencias</div>
+    <div class="tab" onclick="showTab('gps')">🛰️ GPS</div>
+    <div class="tab" onclick="showTab('stats')">📊 Stats</div>
+  </div>
+
+  <div class="main">
+
+    <!-- CÉDULA -->
+    <div class="section active" id="tab-cedula">
+      <div class="section-header"><div class="dot"></div>CONSULTA POR CÉDULA</div>
+      <div class="section-body">
+        <div class="row">
+          <div class="form-group">
+            <label>Número de Cédula</label>
+            <input type="text" id="cedulaInput" placeholder="Ej: 1002498528" onkeydown="if(event.key==='Enter')buscarCedula()">
+          </div>
+          <div class="form-group" style="flex:0;display:flex;align-items:flex-end">
+            <button class="btn btn-primary" onclick="buscarCedula()">🔍 Buscar</button>
+          </div>
+        </div>
+        <div class="result-box" id="cedulaResult">Ingresa una cédula para consultar...</div>
+      </div>
+    </div>
+
+    <!-- LICENCIAS -->
+    <div class="section" id="tab-keys">
+      <div class="section-header"><div class="dot"></div>GESTIÓN DE LICENCIAS</div>
+      <div class="section-body">
+        <div id="keysAlert" class="alert"></div>
+        <div class="row" style="margin-bottom:20px">
+          <div class="form-group">
+            <label>ID Usuario Telegram</label>
+            <input type="text" id="keyUserId" placeholder="123456789">
+          </div>
+          <div class="form-group">
+            <label>Días de vigencia</label>
+            <input type="number" id="keyDias" placeholder="30" value="30">
+          </div>
+          <div class="form-group" style="flex:0;display:flex;align-items:flex-end">
+            <button class="btn btn-primary" onclick="genKey()">➕ Generar</button>
+          </div>
+        </div>
+        <div class="section-header" style="border-top:1px solid var(--border);margin:0 -20px;padding:14px 20px">
+          <div class="dot"></div>KEYS ACTIVAS
+        </div>
+        <div style="height:16px"></div>
+        <div class="table-wrap">
+          <table id="keysTable">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Usuario</th>
+                <th>Expira</th>
+                <th>Estado</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="keysTbody">
+              <tr><td colspan="5" style="color:var(--text2);text-align:center">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- GPS -->
+    <div class="section" id="tab-gps">
+      <div class="section-header"><div class="dot"></div>USUARIOS GPS</div>
+      <div class="section-body">
+        <div id="gpsAlert" class="alert"></div>
+        <div class="table-wrap" style="margin-bottom:24px">
+          <table>
+            <thead>
+              <tr><th>CC</th><th>Nombre</th><th>Dirección</th><th>Celular</th><th>Código</th><th>Acción</th></tr>
+            </thead>
+            <tbody id="gpsTbody">
+              <tr><td colspan="6" style="color:var(--text2);text-align:center">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section-header" style="border-top:1px solid var(--border);margin:0 -20px;padding:14px 20px;margin-bottom:16px">
+          <div class="dot"></div>AGREGAR USUARIO GPS
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Cédula</label>
+            <input type="text" id="gpsCC" placeholder="Número de cédula">
+          </div>
+          <div class="form-group">
+            <label>Nombre Completo</label>
+            <input type="text" id="gpsNombre" placeholder="Nombre y apellido">
+          </div>
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Dirección</label>
+            <input type="text" id="gpsDir" placeholder="Dirección">
+          </div>
+          <div class="form-group">
+            <label>Celular</label>
+            <input type="text" id="gpsCel" placeholder="3001234567">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addGPS()">➕ Agregar GPS</button>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="section" id="tab-stats">
+      <div class="section-header"><div class="dot"></div>ESTADÍSTICAS</div>
+      <div class="section-body">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-num" id="statUsers">—</div>
+            <div class="stat-label">Usuarios</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statKeys">—</div>
+            <div class="stat-label">Keys Activas</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statGPS">—</div>
+            <div class="stat-label">GPS Registrados</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" style="color:var(--success)">●</div>
+            <div class="stat-label">Bot Online</div>
+          </div>
+        </div>
+        <div class="result-box" id="statsInfo">Cargando estadísticas...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const API = 'https://api.telegram.org'; // placeholder
+  const BOT_TOKEN = '';
+  const ADMIN_PASS = 'Curry123';
+
+  // LOGIN
+  function doLogin() {
+    const pass = document.getElementById('loginPass').value;
+    if (pass === ADMIN_PASS) {
+      document.getElementById('loginWrap').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      startClock();
+      loadKeys();
+      loadGPS();
+      loadStats();
+    } else {
+      const a = document.getElementById('loginAlert');
+      a.classList.add('show');
+      setTimeout(() => a.classList.remove('show'), 3000);
+    }
+  }
+
+  function logout() {
+    document.getElementById('loginWrap').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('loginPass').value = '';
+  }
+
+  // CLOCK
+  function startClock() {
+    setInterval(() => {
+      const now = new Date();
+      const t = now.toLocaleTimeString('es-CO', {timeZone:'America/Bogota'});
+      document.getElementById('clock').textContent = t;
+    }, 1000);
+  }
+
+  // TABS
+  function showTab(name) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  // BUSCAR CÉDULA
+  function buscarCedula() {
+    const cc = document.getElementById('cedulaInput').value.trim();
+    const box = document.getElementById('cedulaResult');
+    if (!cc) { box.textContent = '⚠️ Ingresa un número de cédula.'; return; }
+    box.innerHTML = '<span style="color:var(--accent)">🔍 Consultando...</span>';
+
+    // Llamar al bot via Telegram sendMessage (el bot procesa)
+    // En producción esto se conecta al backend PHP/Python
+    setTimeout(() => {
+      box.innerHTML =
+        '<span class="label">CÉDULA     </span><span class="value">' + cc + '</span>\n' +
+        '<span class="label">ESTADO     </span><span style="color:var(--text2)">Conecta el backend para ver datos reales</span>\n\n' +
+        '<span style="color:var(--text2)">💡 Configura API_URL en el panel para conectar con la base de datos.</span>';
+    }, 800);
+  }
+
+  // KEYS - datos demo
+  const keysDemo = [
+    { key: 'KEY-AbCdEf123456789', user: '@usuario1', expira: '2026-06-01', activa: true },
+    { key: 'KEY-XyZ987654321abc', user: '@usuario2', expira: '2026-04-15', activa: true },
+    { key: 'KEY-Demo000000000x', user: 'Sin asignar', expira: '2026-03-10', activa: false },
+  ];
+
+  function loadKeys() {
+    const tbody = document.getElementById('keysTbody');
+    tbody.innerHTML = keysDemo.map(k => `
+      <tr>
+        <td><span style="font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--accent)">${k.key}</span></td>
+        <td>${k.user}</td>
+        <td>${k.expira}</td>
+        <td><span class="badge ${k.activa ? 'badge-success' : 'badge-danger'}">${k.activa ? 'ACTIVA' : 'EXPIRADA'}</span></td>
+        <td><button class="btn btn-danger" style="padding:4px 12px;font-size:12px" onclick="delKey('${k.key}')">🗑️</button></td>
+      </tr>`).join('');
+    document.getElementById('statKeys').textContent = keysDemo.filter(k=>k.activa).length;
+  }
+
+  function genKey() {
+    const uid = document.getElementById('keyUserId').value.trim();
+    const dias = document.getElementById('keyDias').value;
+    const alert = document.getElementById('keysAlert');
+    if (!uid || !dias) {
+      alert.className = 'alert alert-danger show';
+      alert.textContent = '❌ Completa todos los campos.';
+      setTimeout(() => alert.classList.remove('show'), 3000);
+      return;
+    }
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const key = 'KEY-' + Array.from({length:15}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+    const expira = new Date(Date.now() + dias*86400000).toISOString().split('T')[0];
+    keysDemo.unshift({ key, user: uid, expira, activa: true });
+    loadKeys();
+    alert.className = 'alert alert-success show';
+    alert.textContent = `✅ Key generada: ${key}`;
+    setTimeout(() => alert.classList.remove('show'), 5000);
+    document.getElementById('keyUserId').value = '';
+  }
+
+  function delKey(key) {
+    if (!confirm('¿Eliminar esta key?')) return;
+    const i = keysDemo.findIndex(k => k.key === key);
+    if (i > -1) keysDemo.splice(i, 1);
+    loadKeys();
+  }
+
+  // GPS - datos demo
+  const gpsDemo = [
+    { cc: '1002498528', nombre: 'Juan Pérez García', dir: 'Cra 5 #12-34', cel: '3001234567', code: 'abc123' },
+    { cc: '900112233',  nombre: 'María López Ruiz',  dir: 'Cl 10 #7-89',  cel: '3109876543', code: 'xyz789' },
+  ];
+
+  function loadGPS() {
+    const tbody = document.getElementById('gpsTbody');
+    tbody.innerHTML = gpsDemo.map(g => `
+      <tr>
+        <td><span class="cc-link">${g.cc}</span></td>
+        <td>${g.nombre}</td>
+        <td>${g.dir}</td>
+        <td>${g.cel}</td>
+        <td><span style="font-family:'Share Tech Mono',monospace;color:var(--accent2)">${g.code}</span></td>
+        <td><button class="btn btn-danger" style="padding:4px 12px;font-size:12px" onclick="delGPS('${g.cc}')">🗑️</button></td>
+      </tr>`).join('');
+    document.getElementById('statGPS').textContent = gpsDemo.length;
+  }
+
+  function addGPS() {
+    const cc = document.getElementById('gpsCC').value.trim();
+    const nombre = document.getElementById('gpsNombre').value.trim();
+    const dir = document.getElementById('gpsDir').value.trim();
+    const cel = document.getElementById('gpsCel').value.trim();
+    const alert = document.getElementById('gpsAlert');
+    if (!cc || !nombre || !dir || !cel) {
+      alert.className = 'alert alert-danger show';
+      alert.textContent = '❌ Completa todos los campos.';
+      setTimeout(() => alert.classList.remove('show'), 3000);
+      return;
+    }
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const code = Array.from({length:6}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+    gpsDemo.unshift({ cc, nombre, dir, cel, code });
+    loadGPS();
+    alert.className = 'alert alert-success show';
+    alert.textContent = `✅ GPS agregado. Código: ${code}`;
+    setTimeout(() => alert.classList.remove('show'), 4000);
+    ['gpsCC','gpsNombre','gpsDir','gpsCel'].forEach(id => document.getElementById(id).value = '');
+  }
+
+  function delGPS(cc) {
+    if (!confirm('¿Eliminar usuario GPS ' + cc + '?')) return;
+    const i = gpsDemo.findIndex(g => g.cc === cc);
+    if (i > -1) gpsDemo.splice(i, 1);
+    loadGPS();
+  }
+
+  // STATS
+  function loadStats() {
+    document.getElementById('statUsers').textContent = '—';
+    const info = document.getElementById('statsInfo');
+    info.innerHTML =
+      '<span class="label">BOT STATUS    </span><span class="value">● ONLINE</span>\n' +
+      '<span class="label">VERSIÓN       </span><span class="value">python-telegram-bot 20.3</span>\n' +
+      '<span class="label">SERVIDOR      </span><span class="value">Railway · europe-west4</span>\n' +
+      '<span class="label">BD STATUS     </span><span style="color:var(--text2)">Configura DB_HOST en Railway Variables</span>\n\n' +
+      '<span style="color:var(--text2)">Para conectar datos reales, configura las variables de entorno en Railway.</span>';
+  }
+</script>
+</body>
+</html>
