@@ -1,3 +1,7 @@
 python-telegram-bot==20.7
 pymysql
 httpx
+selenium
+requests
+beautifulsoup4
+lxml
