@@ -1,2 +1,3 @@
-pip uninstall python-telegram-bot -y
-pip install -r requirements.txt
+python-telegram-bot==20.7
+pymysql
+httpx
