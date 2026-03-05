@@ -1,14 +1,216 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import threading
-import uvicorn
-from bot_telegram import main as bot_main
-from dashboard_api import app as dashboard_app
+"""
+Dashboard API - Backend para SYS//PANEL v2.0
+"""
+import os
+import random
+import string
+from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import pymysql
 
-def run_dashboard():
-    uvicorn.run(dashboard_app, host="0.0.0.0", port=8000, log_level="warning")
+app = FastAPI()
 
-if __name__ == "__main__":
-    t = threading.Thread(target=run_dashboard, daemon=True)
-    t.start()
-    bot_main()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ─── DB CONFIG ────────────────────────────────────────────────────────────────
+DB = {
+    'host':        'metro.proxy.rlwy.net',
+    'port':        51432,
+    'user':        'root',
+    'password':    'rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ',
+    'charset':     'utf8mb4',
+    'cursorclass': pymysql.cursors.DictCursor,
+    'connect_timeout': 10,
+}
+
+def con(db='railway'):
+    return pymysql.connect(**{**DB, 'database': db})
+
+def gen_key(n=16):
+    return 'KEY-' + ''.join(random.choices(string.ascii_letters + string.digits, k=n))
+
+def gen_code(n=6):
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=n))
+
+def v(val):
+    return str(val).strip() if val else ''
+
+# ─── MODELS ───────────────────────────────────────────────────────────────────
+class KeyCreate(BaseModel):
+    user_id: str
+    dias: int = 30
+
+class GPSCreate(BaseModel):
+    cc: str
+    nombre: str
+    direccion: str
+    celular: str
+
+# ─── ROUTES ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/cedula/{cedula}")
+def buscar_cedula(cedula: str):
+    try:
+        c = con('ani')
+        with c.cursor() as cur:
+            cur.execute("SELECT * FROM ani WHERE ANINuip=%s LIMIT 1", (cedula,))
+            r = cur.fetchone()
+        c.close()
+        if not r:
+            return {"found": False}
+        return {
+            "found": True,
+            "nuip":      v(r.get('ANINuip')),
+            "nombre1":   v(r.get('ANINombre1')),
+            "nombre2":   v(r.get('ANINombre2')),
+            "apellido1": v(r.get('ANIApellido1')),
+            "apellido2": v(r.get('ANIApellido2')),
+            "padre":     v(r.get('ANINombresPadre')),
+            "madre":     v(r.get('ANINombresMadre')),
+            "nacimiento":v(r.get('ANIFchNacimiento')),
+            "expedicion":v(r.get('ANIFchExpedicion')),
+            "sexo":      v(r.get('ANISexo')),
+            "estatura":  v(r.get('ANIEstatura')),
+            "sangre":    v(r.get('GRSId')),
+            "direccion": v(r.get('ANIDireccion')),
+            "telefono":  v(r.get('ANITelefono')),
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/keys")
+def listar_keys():
+    try:
+        c = con()
+        with c.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS licencias (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    key_code VARCHAR(30), user_id VARCHAR(30),
+                    expira DATE, activa TINYINT DEFAULT 1,
+                    creado DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cur.execute("SELECT * FROM licencias ORDER BY creado DESC LIMIT 100")
+            rows = cur.fetchall()
+        c.close()
+        return {"keys": rows}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/keys")
+def crear_key(data: KeyCreate):
+    try:
+        key = gen_key()
+        expira = (datetime.now() + timedelta(days=data.dias)).date()
+        c = con()
+        with c.cursor() as cur:
+            cur.execute("INSERT INTO licencias (key_code, user_id, expira) VALUES (%s,%s,%s)",
+                        (key, data.user_id, expira))
+            c.commit()
+        c.close()
+        return {"key": key, "expira": str(expira)}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.delete("/api/keys/{key_code}")
+def eliminar_key(key_code: str):
+    try:
+        c = con()
+        with c.cursor() as cur:
+            cur.execute("DELETE FROM licencias WHERE key_code=%s", (key_code,))
+            c.commit()
+        c.close()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/gps")
+def listar_gps():
+    try:
+        c = con()
+        with c.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS usersgps (
+                    ide_per INT AUTO_INCREMENT PRIMARY KEY,
+                    cc VARCHAR(20), name VARCHAR(100),
+                    dir VARCHAR(200), cel VARCHAR(20), code VARCHAR(20)
+                )
+            """)
+            cur.execute("SELECT * FROM usersgps ORDER BY ide_per DESC LIMIT 100")
+            rows = cur.fetchall()
+        c.close()
+        return {"gps": rows}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/gps")
+def agregar_gps(data: GPSCreate):
+    try:
+        code = gen_code()
+        c = con()
+        with c.cursor() as cur:
+            cur.execute("INSERT INTO usersgps (cc,name,dir,cel,code) VALUES (%s,%s,%s,%s,%s)",
+                        (data.cc, data.nombre, data.direccion, data.celular, code))
+            c.commit()
+        c.close()
+        return {"ok": True, "code": code}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.delete("/api/gps/{cc}")
+def eliminar_gps(cc: str):
+    try:
+        c = con()
+        with c.cursor() as cur:
+            cur.execute("DELETE FROM usersgps WHERE cc=%s", (cc,))
+            c.commit()
+        c.close()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/stats")
+def stats():
+    try:
+        c = con()
+        result = {}
+        with c.cursor() as cur:
+            try:
+                cur.execute("SELECT COUNT(*) as n FROM licencias WHERE activa=1 AND expira >= CURDATE()")
+                result['keys'] = cur.fetchone()['n']
+            except:
+                result['keys'] = 0
+            try:
+                cur.execute("SELECT COUNT(*) as n FROM usersgps")
+                result['gps'] = cur.fetchone()['n']
+            except:
+                result['gps'] = 0
+        c.close()
+        result['status'] = 'online'
+        result['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        return result
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# Servir el frontend
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
