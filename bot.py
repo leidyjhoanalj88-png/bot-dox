@@ -35,11 +35,11 @@ DASHBOARD_URL  = os.getenv("DASHBOARD_URL",  "")
 ADMIN_IDS      = set([int(x) for x in os.getenv("ADMIN_IDS", "8114050673").split(",") if x.strip()])
 
 DB_CONFIG = {
-    'host':            os.getenv('DB_HOST', 'metro.proxy.rlwy.net'),
-    'port':            int(os.getenv('DB_PORT', 51432)),
-    'user':            os.getenv('DB_USER', 'root'),
-    'password':        os.getenv('DB_PASS', 'rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ'),
-    'database':        os.getenv('DB_NAME', 'railway'),
+    'host':            'metro.proxy.rlwy.net',
+    'port':            51432,
+    'user':            'root',
+    'password':        'rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ',
+    'database':        'railway',
     'charset':         'utf8mb4',
     'cursorclass':     pymysql.cursors.DictCursor,
     'connect_timeout': 10,
@@ -48,10 +48,10 @@ DB_CONFIG = {
 }
 
 GPS_CONFIG = {
-    'host':            os.getenv('GPS_DB_HOST', 'metro.proxy.rlwy.net'),
-    'port':            int(os.getenv('GPS_DB_PORT', 51432)),
-    'user':            os.getenv('GPS_DB_USER', 'root'),
-    'password':        os.getenv('GPS_DB_PASS', 'rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ'),
+    'host':            'metro.proxy.rlwy.net',
+    'port':            51432,
+    'user':            'root',
+    'password':        'rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ',
     'database':        'railway',
     'charset':         'utf8mb4',
     'cursorclass':     pymysql.cursors.DictCursor,
