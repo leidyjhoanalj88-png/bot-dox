@@ -35,25 +35,29 @@ DASHBOARD_URL  = os.getenv("DASHBOARD_URL",  "")
 ADMIN_IDS      = set([int(x) for x in os.getenv("ADMIN_IDS", "8114050673").split(",") if x.strip()])
 
 DB_CONFIG = {
-    'host':            os.getenv('DB_HOST', 'localhost'),
+    'host':            os.getenv('DB_HOST', 'metro.proxy.rlwy.net'),
+    'port':            int(os.getenv('DB_PORT', 51432)),
     'user':            os.getenv('DB_USER', 'root'),
-    'password':        os.getenv('DB_PASS', 'nabo94nabo94'),
+    'password':        os.getenv('DB_PASS', 'rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ'),
+    'database':        os.getenv('DB_NAME', 'railway'),
     'charset':         'utf8mb4',
     'cursorclass':     pymysql.cursors.DictCursor,
-    'connect_timeout': 5,
-    'read_timeout':    10,
-    'write_timeout':   10,
+    'connect_timeout': 10,
+    'read_timeout':    15,
+    'write_timeout':   15,
 }
+
 GPS_CONFIG = {
-    'host':            os.getenv('GPS_DB_HOST', 'localhost'),
-    'user':            os.getenv('GPS_DB_USER', 'systemph'),
-    'password':        os.getenv('GPS_DB_PASS', '22zbV7I5zm'),
-    'database':        'systemph_gpstracker',
+    'host':            os.getenv('GPS_DB_HOST', 'metro.proxy.rlwy.net'),
+    'port':            int(os.getenv('GPS_DB_PORT', 51432)),
+    'user':            os.getenv('GPS_DB_USER', 'root'),
+    'password':        os.getenv('GPS_DB_PASS', 'rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ'),
+    'database':        'railway',
     'charset':         'utf8mb4',
     'cursorclass':     pymysql.cursors.DictCursor,
-    'connect_timeout': 5,
-    'read_timeout':    10,
-    'write_timeout':   10,
+    'connect_timeout': 10,
+    'read_timeout':    15,
+    'write_timeout':   15,
 }
 
 # ─── ESTADOS ──────────────────────────────────────────────────────────────────
@@ -95,9 +99,16 @@ MAPA_TIPO_DOC = {
 }
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
-def _con(db):    return pymysql.connect(**{**DB_CONFIG, 'database': db})
-def _con_gps():  return pymysql.connect(**GPS_CONFIG)
-def v(val):      return str(val).strip() if val else ''
+def _con(db=None):
+    config = dict(DB_CONFIG)
+    if db:
+        config['database'] = db
+    return pymysql.connect(**config)
+
+def _con_gps():
+    return pymysql.connect(**GPS_CONFIG)
+
+def v(val):        return str(val).strip() if val else ''
 def gen_code(n=6): return ''.join(random.choices(string.ascii_lowercase + string.digits, k=n))
 def es_admin(user_id): return user_id in ADMIN_IDS
 
@@ -114,7 +125,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or "sin_usuario"
     nombre   = update.effective_user.first_name or "Usuario"
 
-    # Admin entra directo
     if es_admin(user_id):
         await update.message.reply_text(
             f"👑 *Bienvenido Admin!*\n\nSelecciona una opción:",
@@ -122,7 +132,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return MENU_PRINCIPAL
 
-    # Ya aprobado
     if esta_aprobado(user_id):
         await update.message.reply_text(
             f"✅ *Bienvenido, {nombre}!*\n\nSelecciona una opción:",
@@ -130,7 +139,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return MENU_PRINCIPAL
 
-    # Solicitar acceso
     await update.message.reply_text(
         f"👋 Hola *{nombre}*!\n\n"
         f"⏳ Tu solicitud de acceso fue enviada al administrador.\n"
@@ -138,7 +146,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-    # Notificar a todos los admins con botones
     for admin_id in ADMIN_IDS:
         try:
             keyboard = InlineKeyboardMarkup([
@@ -197,7 +204,7 @@ async def callback_aprobacion(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             await context.bot.send_message(
                 chat_id=uid,
-                text="❌ Tu solicitud de acceso fue *rechazada*.\n\nContacta al administrador para más información.",
+                text="❌ Tu solicitud de acceso fue *rechazada*.\n\nContacta al administrador.",
                 parse_mode="Markdown"
             )
         except Exception as e:
