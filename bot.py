@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 BOT DOX - Sistema Unificado Completo
-Keys + Licencias + Consultas + SISBEN + GPS
+Acceso con aprobación de Admin + Consultas + SISBEN + GPS
 """
 
 import os
@@ -10,14 +10,14 @@ import logging
 import random
 import string
 import pymysql
-from datetime import datetime, timedelta
+from datetime import datetime
 from telegram import (
     Update, ReplyKeyboardMarkup, ReplyKeyboardRemove,
     InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
-    filters, ContextTypes, ConversationHandler
+    filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 )
 from sisben_scraper import consultar_sisben, formatear_resultado_telegram
 
@@ -31,7 +31,6 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8781292195:AAEfjQZCV0-OgYq3VGJZ_7IDKSEsp3yMf-A")
-BOT_PASSWORD   = os.getenv("BOT_PASSWORD",   "admin123")
 DASHBOARD_URL  = os.getenv("DASHBOARD_URL",  "")
 ADMIN_IDS      = set([int(x) for x in os.getenv("ADMIN_IDS", "8114050673").split(",") if x.strip()])
 
@@ -58,12 +57,13 @@ GPS_CONFIG = {
 }
 
 # ─── ESTADOS ──────────────────────────────────────────────────────────────────
-(MENU_PRINCIPAL, ESPERANDO_PASSWORD, ESPERANDO_CEDULA,
+(MENU_PRINCIPAL, ESPERANDO_CEDULA,
  ESPERANDO_NOMBRE, ESPERANDO_APELLIDO, MENU_GPS,
  GPS_CC, GPS_NAME, GPS_DIR, GPS_CEL,
- SISBEN_TIPO_DOC, SISBEN_NUM_DOC) = range(12)
+ SISBEN_TIPO_DOC, SISBEN_NUM_DOC) = range(11)
 
-USUARIOS_AUTH = set()
+# ─── USUARIOS APROBADOS EN MEMORIA ────────────────────────────────────────────
+USUARIOS_APROBADOS = set()
 
 # ─── TECLADOS ─────────────────────────────────────────────────────────────────
 TECLADO_MENU = ReplyKeyboardMarkup([
@@ -99,251 +99,175 @@ def _con(db):    return pymysql.connect(**{**DB_CONFIG, 'database': db})
 def _con_gps():  return pymysql.connect(**GPS_CONFIG)
 def v(val):      return str(val).strip() if val else ''
 def gen_code(n=6): return ''.join(random.choices(string.ascii_lowercase + string.digits, k=n))
+def es_admin(user_id): return user_id in ADMIN_IDS
 
-def es_admin(user_id):
-    return user_id in ADMIN_IDS
-
-def tiene_key_valida(user_id):
+def esta_aprobado(user_id):
     if es_admin(user_id):
         return True
-    con = None
-    try:
-        con = _con('ani')
-        with con.cursor() as cur:
-            cur.execute("""
-                SELECT 1 FROM user_keys
-                WHERE user_id = %s AND redeemed = TRUE AND expiration_date > NOW()
-            """, (user_id,))
-            return cur.fetchone() is not None
-    except Exception as e:
-        logger.error(f"tiene_key_valida: {e}")
-        return False
-    finally:
-        if con: con.close()
-
-def puede_usar(user_id):
-    return user_id in USUARIOS_AUTH and tiene_key_valida(user_id)
+    return user_id in USUARIOS_APROBADOS
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  AUTENTICACIÓN
+#  INICIO — Solicitud de acceso
 # ═══════════════════════════════════════════════════════════════════════════════
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id  = update.effective_user.id
     username = update.effective_user.username or "sin_usuario"
-    try:
-        con = _con('ani')
-        with con.cursor() as cur:
-            cur.execute("SELECT user_id FROM users WHERE user_id = %s", (user_id,))
-            if not cur.fetchone():
-                cur.execute(
-                    "INSERT INTO users (user_id, telegram_username, date_registered) VALUES (%s,%s,%s)",
-                    (user_id, username, datetime.now())
-                )
-                con.commit()
-        con.close()
-    except Exception as e:
-        logger.error(f"start registro: {e}")
+    nombre   = update.effective_user.first_name or "Usuario"
 
-    if user_id in USUARIOS_AUTH and tiene_key_valida(user_id):
-        await update.message.reply_text("✅ Ya estás autenticado.\n\nSelecciona una opción:", reply_markup=TECLADO_MENU)
+    # Admin entra directo
+    if es_admin(user_id):
+        await update.message.reply_text(
+            f"👑 *Bienvenido Admin!*\n\nSelecciona una opción:",
+            parse_mode="Markdown", reply_markup=TECLADO_MENU
+        )
         return MENU_PRINCIPAL
 
+    # Ya aprobado
+    if esta_aprobado(user_id):
+        await update.message.reply_text(
+            f"✅ *Bienvenido, {nombre}!*\n\nSelecciona una opción:",
+            parse_mode="Markdown", reply_markup=TECLADO_MENU
+        )
+        return MENU_PRINCIPAL
+
+    # Solicitar acceso
     await update.message.reply_text(
-        "<b>🔍 BOT DOX — Sistema de Consulta</b>\n\n"
-        "<i>Ingresa la contraseña de acceso:</i>",
-        parse_mode="HTML", reply_markup=ReplyKeyboardRemove()
+        f"👋 Hola *{nombre}*!\n\n"
+        f"⏳ Tu solicitud de acceso fue enviada al administrador.\n"
+        f"Espera la aprobación para continuar.",
+        parse_mode="Markdown"
     )
-    return ESPERANDO_PASSWORD
 
-
-async def verificar_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if update.message.text.strip() == BOT_PASSWORD:
-        if not tiene_key_valida(user_id):
-            await update.message.reply_text(
-                "🔑 Contraseña correcta.\n\n"
-                "⚠️ No tienes licencia activa.\n"
-                "Usa /redeem TU\\_KEY para activarla.",
-                parse_mode="Markdown"
+    # Notificar a todos los admins con botones
+    for admin_id in ADMIN_IDS:
+        try:
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Aprobar", callback_data=f"aprobar_{user_id}"),
+                    InlineKeyboardButton("❌ Rechazar", callback_data=f"rechazar_{user_id}")
+                ]
+            ])
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=(
+                    f"🔔 *Nueva solicitud de acceso*\n\n"
+                    f"👤 Nombre: *{nombre}*\n"
+                    f"🆔 ID: `{user_id}`\n"
+                    f"📛 Usuario: @{username}"
+                ),
+                parse_mode="Markdown",
+                reply_markup=keyboard
             )
-            return ESPERANDO_PASSWORD
-        USUARIOS_AUTH.add(user_id)
-        await update.message.reply_text("✅ *Acceso concedido*\n\nBienvenido.", parse_mode="Markdown", reply_markup=TECLADO_MENU)
-        return MENU_PRINCIPAL
-    await update.message.reply_text("❌ Contraseña incorrecta. Intenta de nuevo:")
-    return ESPERANDO_PASSWORD
+        except Exception as e:
+            logger.error(f"Error notificando admin {admin_id}: {e}")
+
+    return ConversationHandler.END
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  COMANDOS DE KEYS
+#  CALLBACK — Admin aprueba o rechaza
 # ═══════════════════════════════════════════════════════════════════════════════
-async def cmd_redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not context.args:
-        await update.message.reply_text("❌ Uso: `/redeem TU_KEY`", parse_mode="Markdown")
+async def callback_aprobacion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query    = update.callback_query
+    admin_id = query.from_user.id
+
+    if not es_admin(admin_id):
+        await query.answer("🚫 No tienes permisos.")
         return
-    key = context.args[0]
-    con = None
-    try:
-        con = _con('ani')
-        with con.cursor() as cur:
-            cur.execute(
-                "SELECT key_id, expiration_date FROM user_keys WHERE key_value=%s AND redeemed=FALSE",
-                (key,)
-            )
-            result = cur.fetchone()
-        if not result:
-            await update.message.reply_text("❌ Clave no válida o ya redimida.")
-            return
-        if result['expiration_date'] < datetime.now():
-            await update.message.reply_text("⏱️ Esta clave ya expiró.")
-            return
-        with con.cursor() as cur:
-            cur.execute("UPDATE user_keys SET redeemed=TRUE, user_id=%s WHERE key_id=%s", (user_id, result['key_id']))
-            con.commit()
-        USUARIOS_AUTH.add(user_id)
-        dias = (result['expiration_date'] - datetime.now()).days
-        await update.message.reply_text(
-            f"✅ *Clave activada*\n\n⏳ Expira en: *{dias} días*\n\nUsa /start para entrar.",
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        logger.error(f"redeem: {e}")
-        await update.message.reply_text("❌ Error al redimir la clave.")
-    finally:
-        if con: con.close()
 
+    data   = query.data
+    accion, uid = data.split("_", 1)
+    uid = int(uid)
 
-async def cmd_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    con = None
-    try:
-        con = _con('ani')
-        with con.cursor() as cur:
-            cur.execute("""
-                SELECT uk.key_value, uk.expiration_date, uk.created_at,
-                       DATEDIFF(uk.expiration_date, NOW()) AS dias_restantes,
-                       u.telegram_username
-                FROM user_keys uk
-                LEFT JOIN users u ON uk.user_id = u.user_id
-                WHERE uk.user_id=%s AND uk.redeemed=TRUE
-                ORDER BY uk.created_at DESC LIMIT 1
-            """, (user_id,))
-            r = cur.fetchone()
-        if r:
-            await update.message.reply_text(
-                f"🔑 *Tu Licencia*\n\n"
-                f"👤 @{v(r.get('telegram_username'))}\n"
-                f"📅 Creada: {v(r.get('created_at'))}\n"
-                f"⏳ Expira en: *{v(r.get('dias_restantes'))} días*\n"
-                f"🔑 `{v(r.get('key_value'))}`",
+    if accion == "aprobar":
+        USUARIOS_APROBADOS.add(uid)
+        await query.edit_message_text(f"✅ Usuario `{uid}` *aprobado*.", parse_mode="Markdown")
+        try:
+            await context.bot.send_message(
+                chat_id=uid,
+                text="✅ *¡Acceso aprobado!*\n\nUsa /start para entrar al bot.",
                 parse_mode="Markdown"
             )
-        else:
-            await update.message.reply_text("⚠️ Sin licencia activa. Usa `/redeem TU_KEY`", parse_mode="Markdown")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
-    finally:
-        if con: con.close()
+        except Exception as e:
+            logger.error(f"Error notificando usuario {uid}: {e}")
+
+    elif accion == "rechazar":
+        USUARIOS_APROBADOS.discard(uid)
+        await query.edit_message_text(f"❌ Usuario `{uid}` *rechazado*.", parse_mode="Markdown")
+        try:
+            await context.bot.send_message(
+                chat_id=uid,
+                text="❌ Tu solicitud de acceso fue *rechazada*.\n\nContacta al administrador para más información.",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Error notificando usuario {uid}: {e}")
+
+    await query.answer()
 
 
-async def cmd_genkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ═══════════════════════════════════════════════════════════════════════════════
+#  COMANDOS ADMIN
+# ═══════════════════════════════════════════════════════════════════════════════
+async def cmd_usuarios(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not es_admin(user_id):
         await update.message.reply_text("🚫 Sin permisos.")
         return
-    if len(context.args) != 2:
-        await update.message.reply_text("❌ Uso: `/genkey ID_USUARIO DIAS`", parse_mode="Markdown")
+    if not USUARIOS_APROBADOS:
+        await update.message.reply_text("⚠️ No hay usuarios aprobados.")
         return
-    try:
-        id_usr = int(context.args[0])
-        dias   = int(context.args[1])
-        key    = "KEY-" + ''.join(random.choices(string.ascii_letters + string.digits, k=15))
-        expira = datetime.now() + timedelta(days=dias)
-        con = _con('ani')
-        with con.cursor() as cur:
-            cur.execute("INSERT INTO user_keys (key_value, user_id, expiration_date) VALUES (%s,%s,%s)", (key, id_usr, expira))
-            con.commit()
-        con.close()
-        await update.message.reply_text(
-            f"✅ *Key generada*\n\n🔑 `{key}`\n👤 Para: `{id_usr}`\n⏳ {dias} días",
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
+    msg = "👥 *Usuarios aprobados:*\n\n"
+    for uid in USUARIOS_APROBADOS:
+        msg += f"🆔 `{uid}`\n"
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 
-async def cmd_delkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_revocar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not es_admin(user_id):
         await update.message.reply_text("🚫 Sin permisos.")
         return
     if not context.args:
-        await update.message.reply_text("❌ Uso: `/delkey KEY_VALUE`", parse_mode="Markdown")
+        await update.message.reply_text("❌ Uso: `/revocar ID_USUARIO`", parse_mode="Markdown")
         return
     try:
-        key = context.args[0]
-        con = _con('ani')
-        with con.cursor() as cur:
-            cur.execute("DELETE FROM user_keys WHERE key_value=%s", (key,))
-            con.commit()
-            ok = cur.rowcount > 0
-        con.close()
-        await update.message.reply_text("✅ Key eliminada." if ok else "⚠️ No encontrada.")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
+        uid = int(context.args[0])
+        USUARIOS_APROBADOS.discard(uid)
+        await update.message.reply_text(f"✅ Acceso revocado para `{uid}`.", parse_mode="Markdown")
+        try:
+            await context.bot.send_message(chat_id=uid, text="⛔ Tu acceso al bot ha sido *revocado*.", parse_mode="Markdown")
+        except:
+            pass
+    except ValueError:
+        await update.message.reply_text("❌ ID inválido.")
 
 
-async def cmd_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not es_admin(user_id):
-        await update.message.reply_text("🚫 Sin permisos.")
-        return
-    con = None
-    try:
-        con = _con('ani')
-        with con.cursor() as cur:
-            cur.execute("""
-                SELECT uk.key_value, uk.expiration_date, uk.redeemed, u.telegram_username
-                FROM user_keys uk LEFT JOIN users u ON uk.user_id=u.user_id
-                ORDER BY uk.created_at DESC LIMIT 20
-            """)
-            claves = cur.fetchall()
-        if not claves:
-            await update.message.reply_text("⚠️ No hay keys.")
-            return
-        msg = "🔑 *Keys registradas:*\n\n"
-        for c in claves:
-            dias   = (c['expiration_date'] - datetime.now()).days if c['expiration_date'] else "?"
-            estado = "✅" if c['redeemed'] else "⏳"
-            usr    = f"@{c['telegram_username']}" if c['telegram_username'] else "Sin usuario"
-            msg   += f"{estado} `{c['key_value']}`\n👤 {usr} | ⏳ {dias} días\n{'─'*20}\n"
-        await update.message.reply_text(msg, parse_mode="Markdown")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
-    finally:
-        if con: con.close()
-
-
+# ═══════════════════════════════════════════════════════════════════════════════
+#  COMANDOS GENERALES
+# ═══════════════════════════════════════════════════════════════════════════════
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "<b>📚 Comandos</b>\n\n"
-        "<b>/start</b> — Iniciar sesión\n"
-        "<b>/redeem KEY</b> — Activar licencia\n"
-        "<b>/info</b> — Ver tu licencia\n"
+    user_id = update.effective_user.id
+    msg = (
+        "<b>📚 Comandos disponibles</b>\n\n"
+        "<b>/start</b> — Iniciar / Solicitar acceso\n"
         "<b>/cc CEDULA</b> — Buscar por cédula\n"
-        "<b>/nombres NOMBRE AP1 AP2</b> — Buscar por nombre\n\n"
-        "<b>👑 Admins:</b>\n"
-        "<b>/genkey ID DIAS</b> — Generar key\n"
-        "<b>/delkey KEY</b> — Eliminar key\n"
-        "<b>/keys</b> — Ver todas las keys\n",
-        parse_mode="HTML"
+        "<b>/nombres NOMBRE AP1 AP2</b> — Buscar por nombre\n"
+        "<b>/help</b> — Ver esta ayuda\n"
     )
+    if es_admin(user_id):
+        msg += (
+            "\n<b>👑 Comandos Admin:</b>\n"
+            "<b>/usuarios</b> — Ver usuarios aprobados\n"
+            "<b>/revocar ID</b> — Revocar acceso a un usuario\n"
+        )
+    await update.message.reply_text(msg, parse_mode="HTML")
 
 
 async def cmd_cc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if not puede_usar(user_id):
-        await update.message.reply_text("🔐 Sin acceso. Usa /start")
+    if not esta_aprobado(user_id):
+        await update.message.reply_text("🔐 Sin acceso. Usa /start para solicitar acceso.")
         return
     if not context.args:
         await update.message.reply_text("❌ Uso: `/cc CEDULA`", parse_mode="Markdown")
@@ -379,11 +303,11 @@ async def cmd_cc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_nombres(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if not puede_usar(user_id):
-        await update.message.reply_text("🔐 Sin acceso. Usa /start")
+    if not esta_aprobado(user_id):
+        await update.message.reply_text("🔐 Sin acceso. Usa /start para solicitar acceso.")
         return
     if len(context.args) < 3:
-        await update.message.reply_text("❌ Uso: `/nombres NOMBRE AP1 AP2`\nEjemplo: `/nombres CARLOS GARCIA LOPEZ`", parse_mode="Markdown")
+        await update.message.reply_text("❌ Uso: `/nombres NOMBRE AP1 AP2`", parse_mode="Markdown")
         return
     nombre1, ap1, ap2 = context.args[0].upper(), context.args[1].upper(), context.args[2].upper()
     nombre2 = context.args[3].upper() if len(context.args) > 3 else None
@@ -418,9 +342,9 @@ async def cmd_nombres(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ═══════════════════════════════════════════════════════════════════════════════
 async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if not puede_usar(user_id):
-        await update.message.reply_text("🔐 Sin acceso. Usa /start")
-        return ESPERANDO_PASSWORD
+    if not esta_aprobado(user_id):
+        await update.message.reply_text("🔐 Sin acceso. Usa /start para solicitar acceso.")
+        return ConversationHandler.END
     texto = update.message.text
 
     if texto == "🔍 Buscar por Cédula":
@@ -452,8 +376,7 @@ async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Panel web no configurado.")
         return MENU_PRINCIPAL
     elif texto == "🚪 Salir":
-        USUARIOS_AUTH.discard(user_id)
-        await update.message.reply_text("👋 Sesión cerrada.", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("👋 Hasta luego!", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     await update.message.reply_text("Selecciona una opción:", reply_markup=TECLADO_MENU)
@@ -482,7 +405,7 @@ async def buscar_cedula(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg = "⚠️ No se encontró núcleo familiar."
             else:
                 with con.cursor() as cur:
-                    cur.execute("""SELECT apellido_a,apellido_b,nombre_a,nombre_b,doc_num,fec_nac,puntaje,nivel,zona,localidad,direccion,telefono FROM sisben_n WHERE ficha=%s ORDER BY persona""", (row['ficha'],))
+                    cur.execute("SELECT apellido_a,apellido_b,nombre_a,nombre_b,doc_num,fec_nac,puntaje,nivel,zona,localidad,direccion,telefono FROM sisben_n WHERE ficha=%s ORDER BY persona", (row['ficha'],))
                     ints = cur.fetchall()
                 con.close()
                 if not ints:
@@ -509,11 +432,11 @@ async def buscar_cedula(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg = f"📞 *Datos de Contacto* `{cedula}`\n\n"
                 if r1:
                     msg += f"👤 *{v(r1.get('APELLIDO1'))} {v(r1.get('APELLIDO2'))}* — {v(r1.get('NOMBRE'))}\n"
-                    if r1.get('CEL1'):     msg += f"📱 {v(r1.get('CEL1'))}\n"
-                    if r1.get('CEL2'):     msg += f"📱 {v(r1.get('CEL2'))}\n"
-                    if r1.get('TELEFONO'): msg += f"📞 {v(r1.get('TELEFONO'))}\n"
-                    if r1.get('DIRECCION'):msg += f"🏠 {v(r1.get('DIRECCION'))}\n"
-                    if r1.get('CIUDAD'):   msg += f"🌆 {v(r1.get('CIUDAD'))}\n"
+                    if r1.get('CEL1'):      msg += f"📱 {v(r1.get('CEL1'))}\n"
+                    if r1.get('CEL2'):      msg += f"📱 {v(r1.get('CEL2'))}\n"
+                    if r1.get('TELEFONO'):  msg += f"📞 {v(r1.get('TELEFONO'))}\n"
+                    if r1.get('DIRECCION'): msg += f"🏠 {v(r1.get('DIRECCION'))}\n"
+                    if r1.get('CIUDAD'):    msg += f"🌆 {v(r1.get('CIUDAD'))}\n"
                 if r2:
                     msg += f"\n{'─'*22}\n👤 {v(r2.get('papellido'))} {v(r2.get('sapellido'))} {v(r2.get('nombres'))}\n"
                     if r2.get('celular'):   msg += f"📱 {v(r2.get('celular'))}\n"
@@ -582,7 +505,7 @@ async def buscar_apellido(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MENU_PRINCIPAL
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  SISBEN OFICIAL
+#  SISBEN
 # ═══════════════════════════════════════════════════════════════════════════════
 async def sisben_tipo_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text
@@ -697,7 +620,6 @@ def main():
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            ESPERANDO_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, verificar_password)],
             MENU_PRINCIPAL:     [MessageHandler(filters.TEXT & ~filters.COMMAND, menu_principal)],
             ESPERANDO_CEDULA:   [MessageHandler(filters.TEXT & ~filters.COMMAND, buscar_cedula)],
             ESPERANDO_NOMBRE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, buscar_nombre)],
@@ -715,14 +637,12 @@ def main():
     )
 
     app.add_handler(conv)
-    app.add_handler(CommandHandler("help",    cmd_help))
-    app.add_handler(CommandHandler("cc",      cmd_cc))
-    app.add_handler(CommandHandler("nombres", cmd_nombres))
-    app.add_handler(CommandHandler("redeem",  cmd_redeem))
-    app.add_handler(CommandHandler("info",    cmd_info))
-    app.add_handler(CommandHandler("genkey",  cmd_genkey))
-    app.add_handler(CommandHandler("delkey",  cmd_delkey))
-    app.add_handler(CommandHandler("keys",    cmd_keys))
+    app.add_handler(CallbackQueryHandler(callback_aprobacion, pattern="^(aprobar|rechazar)_"))
+    app.add_handler(CommandHandler("help",     cmd_help))
+    app.add_handler(CommandHandler("cc",       cmd_cc))
+    app.add_handler(CommandHandler("nombres",  cmd_nombres))
+    app.add_handler(CommandHandler("usuarios", cmd_usuarios))
+    app.add_handler(CommandHandler("revocar",  cmd_revocar))
 
     logger.info("✅ BOT DOX iniciado...")
     app.run_polling(drop_pending_updates=True)
