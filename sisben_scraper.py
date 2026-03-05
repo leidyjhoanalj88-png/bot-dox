@@ -27,7 +27,72 @@ TIPOS_DOCUMENTO = {
     "9": "Permiso Proteccion Temporal",
 }
 
-def consultar_sisben(tipo_doc, numero_doc):
+def consultar_sisben_selenium(tipo_doc, numero_doc):
+    """Consulta SISBEN usando Selenium con Chrome headless."""
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait, Select
+        from selenium.webdriver.support import expected_conditions as EC
+
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+        options.binary_location = "/usr/bin/chromium"
+
+        service = Service("/usr/bin/chromedriver")
+        driver = webdriver.Chrome(service=service, options=options)
+
+        try:
+            driver.get(URL_PAGINA)
+            wait = WebDriverWait(driver, 15)
+
+            # Seleccionar tipo de documento
+            try:
+                select_elem = wait.until(EC.presence_of_element_located((By.NAME, "TipoID")))
+                select = Select(select_elem)
+                select.select_by_value(tipo_doc)
+            except:
+                pass
+
+            # Ingresar número de documento
+            try:
+                input_doc = wait.until(EC.presence_of_element_located((By.NAME, "documento")))
+                input_doc.clear()
+                input_doc.send_keys(numero_doc)
+            except:
+                input_doc = driver.find_element(By.CSS_SELECTOR, "input[type='text']")
+                input_doc.clear()
+                input_doc.send_keys(numero_doc)
+
+            # Clic en consultar
+            try:
+                btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']")
+                btn.click()
+            except:
+                pass
+
+            time.sleep(4)
+            html = driver.page_source
+            return _parsear_html_selenium(html, tipo_doc, numero_doc)
+
+        finally:
+            driver.quit()
+
+    except Exception as e:
+        logger.error(f"Selenium error: {e}")
+        return consultar_sisben_requests(tipo_doc, numero_doc)
+
+
+def consultar_sisben_requests(tipo_doc, numero_doc):
+    """Fallback con requests."""
     try:
         session = requests.Session()
         session.headers.update(HEADERS)
@@ -56,6 +121,54 @@ def consultar_sisben(tipo_doc, numero_doc):
     except Exception as e:
         return {"error": f"❌ Error: {str(e)}"}
 
+
+def consultar_sisben(tipo_doc, numero_doc):
+    """Función principal — intenta Selenium primero, luego requests."""
+    return consultar_sisben_selenium(tipo_doc, numero_doc)
+
+
+def _parsear_html_selenium(html, tipo_doc, numero_doc):
+    soup = BeautifulSoup(html, "html.parser")
+    texto = soup.get_text()
+    texto_lower = texto.lower()
+
+    if "no se encontr" in texto_lower or "no registra" in texto_lower or "no está" in texto_lower:
+        return {"no_encontrado": True}
+
+    resultado = {
+        "tipo_doc": TIPOS_DOCUMENTO.get(tipo_doc, tipo_doc),
+        "num_doc":  numero_doc,
+        "grupo": "", "clasificacion": "", "nombres": "",
+        "apellidos": "", "municipio": "", "departamento": "",
+        "ficha": "", "encuesta": "", "fecha": "",
+    }
+
+    # Buscar grupo SISBEN
+    for tag in soup.find_all(["h1","h2","h3","h4","p","div","span","td"]):
+        t = tag.get_text(strip=True)
+        if "grupo" in t.lower() and len(t) < 100:
+            resultado["grupo"] = t
+            break
+
+    # Buscar nombre
+    for tag in soup.find_all(["td","p","div","span"]):
+        t = tag.get_text(strip=True)
+        if len(t) > 5 and t.isupper() and len(t.split()) >= 2:
+            if not any(x in t.lower() for x in ["grupo","sisben","consulta","municipio"]):
+                if not resultado["nombres"]:
+                    partes = t.split()
+                    if len(partes) >= 4:
+                        resultado["apellidos"] = " ".join(partes[:2])
+                        resultado["nombres"]   = " ".join(partes[2:])
+                    else:
+                        resultado["nombres"] = t
+
+    if not resultado["grupo"] and not resultado["nombres"]:
+        return {"no_encontrado": True}
+
+    return resultado
+
+
 def _parsear_json(data, tipo_doc, numero_doc):
     if not data:
         return {"no_encontrado": True}
@@ -71,13 +184,11 @@ def _parsear_json(data, tipo_doc, numero_doc):
         "ficha":         data.get("ficha") or "",
         "encuesta":      data.get("encuesta") or "",
         "fecha":         data.get("fecha") or "",
-        "direccion":     data.get("direccion") or "",
-        "telefono":      data.get("telefono") or "",
-        "correo":        data.get("correo") or "",
     }
     if not any([resultado["nombres"], resultado["apellidos"], resultado["grupo"]]):
         return {"no_encontrado": True}
     return resultado
+
 
 def _parsear_html(html, tipo_doc, numero_doc):
     soup = BeautifulSoup(html, "html.parser")
@@ -85,6 +196,7 @@ def _parsear_html(html, tipo_doc, numero_doc):
     if "no se encontr" in texto or "no registra" in texto:
         return {"no_encontrado": True}
     return {"no_encontrado": True}
+
 
 def formatear_resultado_telegram(r):
     if "error" in r:
