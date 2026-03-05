@@ -1,8 +1,12 @@
+
+
 python-telegram-bot==20.3
 pymysql
+cryptography
 httpx
 selenium
 requests
 beautifulsoup4
-lxml 
-
+lxml
+fastapi
+uvicorn
