@@ -5,6 +5,9 @@ import pymysql
 
 logger = logging.getLogger(__name__)
 
+# =============================================================
+# 1.131 MUNICIPIOS DE COLOMBIA
+# =============================================================
 LUG_ORI_DATA = [
     ("01003","PUERTO LIBRE","ANTIOQUIA"),
     ("01004","ABEJORRAL","ANTIOQUIA"),
@@ -91,7 +94,7 @@ LUG_ORI_DATA = [
     ("01232","SAN LUIS","ANTIOQUIA"),
     ("01237","SAN PEDRO DE URABA","ANTIOQUIA"),
     ("01238","SAN RAFAEL","ANTIOQUIA"),
-    ("01241","SAN  ROQUE","ANTIOQUIA"),
+    ("01241","SAN ROQUE","ANTIOQUIA"),
     ("01244","SAN VICENTE","ANTIOQUIA"),
     ("01253","SANTO DOMINGO","ANTIOQUIA"),
     ("01256","SANTUARIO","ANTIOQUIA"),
@@ -843,7 +846,7 @@ LUG_ORI_DATA = [
     ("27169","PUERTO WILCHES","SANTANDER"),
     ("27174","SABANA DE TORRES","SANTANDER"),
     ("27175","SAN ANDRES","SANTANDER"),
-    ("27178","SAN  BENITO","SANTANDER"),
+    ("27178","SAN BENITO","SANTANDER"),
     ("27181","SAN GIL","SANTANDER"),
     ("27187","SAN JOSE DE MIRANDA","SANTANDER"),
     ("27195","SANTA BARBARA","SANTANDER"),
@@ -1136,19 +1139,61 @@ LUG_ORI_DATA = [
     ("72016","SAN JOSE DE OCUNE","VICHADA"),
     ("72020","SANTA RITA","VICHADA"),
     ("72021","AJURUARE","VICHADA"),
-    ("72022","AMANAVEN","VICHADA")
+    ("72022","AMANAVEN","VICHADA"),
 ]
+
+# =============================================================
+# CÉDULAS RECUPERADAS DE LA BASE DE DATOS
+# Agrega más filas aquí si consigues más datos
+# Formato: (cedula, papellido, sapellido, nombres,
+#            teloficina, direccion, telresiden, celular, ciudad)
+# =============================================================
+CEDULAS_DATA = [
+    ("10011521",   "VERA",    "MORALES",  "RICARDO ALBERTO",  "3341227",    "CR 16 # 4-93",               "3205555",    "",             "PEREIRA"),
+    ("10063211",   "CORREA",  "ZULUAGA",  "ALVARO",           "3124637",    "CRA 43C # 1-75 APTO 000",    "3104634338", "3104488126",   "MEDELLIN"),
+    ("10085305",   "BARRETO", "VEGA",     "DANIEL RICARDO",   "3341900",    "CR 7 NRO. 19-28",            "3117089807", "3104220319",   "PEREIRA"),
+    ("10134857",   "BEDOYA",  "CARDONA",  "CESAR AUGUSTO",    "3250681",    "CALLE 23 6-59 EDIF CENTRO",  "3250681",    "",             "PEREIRA"),
+    ("1013582403", "PENAGOS", "",         "GILDARDO",         "0",          "CR. 40 NRO. 34-18",          "3103020071", "3103148789",   "BOGOTA"),
+    ("1014181861", "ROMERO",  "PIRABAN",  "CARLOS ARTURO",    "4307614",    "KR 72 A 71 18",              "3132486948", "",             "BOGOTA"),
+    ("10144201",   "GARCIA",  "URIBE",    "JOSE JAIR",        "0055840197", "MZ 176 CS 20 URB DON ALBERT","3168683260", "3135343631",   "VALLEDUPAR"),
+    ("1018411612", "GARZON",  "SALAZAR",  "GUSTAVO ANDRES",   "4180166",    "CR. 89 NRO. 32-60",          "3123003852", "",             "BOGOTA"),
+    ("1019002516", "MALPIC",  "PEREZ",    "ALEJANDRO",        "6888318",    "CL. 150 NRO. 114C10",        "5627043",    "3112563061",   "BOGOTA"),
+    ("176517",     "RAMOS",   "RAMIREZ",  "ALFREDO",          "6826566",    "CL 139 NO 102-05 SUBA COS",  "3132072904", "",             "BOGOTA"),
+    ("5151",       "LONDONO", "ARIZA",    "ALVARO",           "8713030",    "CR. 5 NRO. 8-67 CENTRO",     "3132078861", "",             "NEIVA"),
+]
+
 
 class Database:
     def __init__(self):
-        self._cache = {}
+        # --- Caché municipios ---
+        self._muni_cache = {}
         for row in LUG_ORI_DATA:
             codigo, municipio, departamento = row
-            # Store with original code
-            self._cache[codigo] = f"{municipio} - {departamento}"
-            # Store with zero-padded 5-digit code
-            self._cache[codigo.zfill(5)] = f"{municipio} - {departamento}"
+            valor = f"{municipio} - {departamento}"
+            self._muni_cache[codigo] = valor
+            self._muni_cache[codigo.zfill(5)] = valor
 
+        # --- Caché cédulas ---
+        self._cedula_cache = {}
+        for row in CEDULAS_DATA:
+            cedula = str(row[0]).strip()
+            self._cedula_cache[cedula] = {
+                "cedula":     cedula,
+                "papellido":  row[1],
+                "sapellido":  row[2],
+                "nombres":    row[3],
+                "teloficina": row[4],
+                "direccion":  row[5],
+                "telresiden": row[6],
+                "celular":    row[7],
+                "ciudad":     row[8],
+            }
+
+        logger.info(f"✅ {len(LUG_ORI_DATA)} municipios y {len(CEDULAS_DATA)} cédulas cargadas en memoria.")
+
+    # ──────────────────────────────────────────
+    # MUNICIPIOS
+    # ──────────────────────────────────────────
     def setup_lug_ori(self):
         logger.info(f"✅ {len(LUG_ORI_DATA)} municipios cargados en memoria.")
 
@@ -1156,14 +1201,44 @@ class Database:
         if not codigo:
             return None
         codigo = str(codigo).strip()
-        # Try as-is first
-        result = self._cache.get(codigo)
+        result = self._muni_cache.get(codigo)
         if result:
             return result
-        # Try zero-padded to 5 digits
-        result = self._cache.get(codigo.zfill(5))
+        result = self._muni_cache.get(codigo.zfill(5))
         if result:
             return result
-        # Try without leading zeros
-        result = self._cache.get(codigo.lstrip('0'))
-        return result
+        return self._muni_cache.get(codigo.lstrip("0"))
+
+    # ──────────────────────────────────────────
+    # CÉDULAS
+    # ──────────────────────────────────────────
+    def buscar_cedula(self, cedula):
+        """
+        Busca una cédula en el caché en memoria.
+        Retorna dict con datos o None si no se encuentra.
+        """
+        cedula = str(cedula).strip()
+        result = self._cedula_cache.get(cedula)
+        if result:
+            logger.info(f"✅ Cédula {cedula} encontrada.")
+            return result
+        logger.info(f"⚠️ Cédula {cedula} no encontrada.")
+        return None
+
+    def formatear_cedula(self, datos):
+        """
+        Formatea el resultado para mostrar en el bot.
+        """
+        if not datos:
+            return None
+        nombre = f"{datos.get('papellido','')} {datos.get('sapellido','')} {datos.get('nombres','')}".strip()
+        tel = datos.get("celular") or datos.get("telresiden") or datos.get("teloficina") or "N/A"
+        ciudad   = datos.get("ciudad")   or "N/A"
+        direccion = datos.get("direccion") or "N/A"
+        return (
+            f"👤 *{nombre}*\n"
+            f"🪪 Cédula: `{datos.get('cedula','')}`\n"
+            f"📍 Ciudad: {ciudad}\n"
+            f"🏠 Dirección: {direccion}\n"
+            f"📞 Teléfono: {tel}"
+        )
