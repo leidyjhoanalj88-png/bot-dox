@@ -1,3 +1,10 @@
+
+# Detener el bot
+Ctrl + C
+
+# Volver a iniciar
+
+
 # ══════════════════════════════════════════════════════════════════
 # INSTRUCCIONES:
 # Abre tu bot.py y haz estos 3 cambios:
