@@ -1,216 +1,459 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-Dashboard API - Backend para SYS//PANEL v2.0
-"""
-import os
-import random
-import string
-from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-import pymysql
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SYS//PANEL v2.0</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+  :root {
+    --bg:#0a0e1a;--bg2:#0d1225;--bg3:#111827;--border:#1e2d4a;
+    --accent:#00e5cc;--accent2:#0099ff;--danger:#ff3b5c;--success:#00e5a0;
+    --text:#c8d8f0;--text2:#6b83a8;--glow:0 0 10px rgba(0,229,204,0.3);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;min-height:100vh;}
+  .header{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+  .logo{font-family:'Share Tech Mono',monospace;color:var(--accent);font-size:18px;letter-spacing:2px;text-shadow:var(--glow);}
+  .logo span{color:var(--text2);}
+  .header-right{display:flex;align-items:center;gap:20px;font-family:'Share Tech Mono',monospace;font-size:13px;}
+  .clock{color:var(--accent);}
+  .region{color:var(--text2);}
+  .tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;padding:0 20px;}
+  .tab{padding:12px 20px;cursor:pointer;color:var(--text2);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.2s;}
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .main{padding:20px;max-width:1000px;margin:0 auto;}
+  .section{background:var(--bg2);border:1px solid var(--border);border-radius:6px;margin-bottom:20px;overflow:hidden;display:none;}
+  .section.active{display:block;}
+  .section-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:2px;font-size:13px;text-transform:uppercase;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:var(--glow);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+  .section-body{padding:20px;}
+  .form-group{margin-bottom:16px;}
+  label{display:block;font-size:11px;letter-spacing:2px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;}
+  input,select,textarea{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:4px;font-family:'Rajdhani',sans-serif;font-size:15px;outline:none;transition:border-color 0.2s;}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 1px rgba(0,229,204,0.2);}
+  input::placeholder{color:var(--text2);}
+  .row{display:flex;gap:12px;}
+  .row .form-group{flex:1;}
+  .btn{padding:10px 20px;border:none;border-radius:4px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;letter-spacing:1px;text-transform:uppercase;transition:all 0.2s;}
+  .btn-primary{background:var(--accent);color:#000;}
+  .btn-primary:hover{background:#00fff5;box-shadow:var(--glow);}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}
+  .btn-danger:hover{background:rgba(255,59,92,0.1);}
+  .btn-secondary{background:transparent;color:var(--accent2);border:1px solid var(--accent2);}
+  .btn-secondary:hover{background:rgba(0,153,255,0.1);}
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th{text-align:left;padding:10px 14px;color:var(--text2);font-size:11px;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid var(--border);}
+  td{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,0.5);vertical-align:middle;}
+  tr:hover td{background:rgba(0,229,204,0.03);}
+  .badge{display:inline-block;padding:3px 10px;border-radius:3px;font-size:12px;font-weight:700;letter-spacing:1px;}
+  .badge-success{background:rgba(0,229,160,0.15);color:var(--success);}
+  .badge-danger{background:rgba(255,59,92,0.15);color:var(--danger);}
+  .badge-info{background:rgba(0,153,255,0.15);color:var(--accent2);}
+  .result-box{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:16px;font-family:'Share Tech Mono',monospace;font-size:13px;line-height:1.8;min-height:80px;color:var(--text);white-space:pre-wrap;}
+  .result-box .label{color:var(--text2);}
+  .result-box .value{color:var(--accent);}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px;}
+  .stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:16px;text-align:center;}
+  .stat-num{font-family:'Share Tech Mono',monospace;font-size:28px;color:var(--accent);text-shadow:var(--glow);}
+  .stat-label{font-size:11px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-top:4px;}
+  .alert{padding:12px 16px;border-radius:4px;margin-bottom:16px;font-size:14px;display:none;}
+  .alert-success{background:rgba(0,229,160,0.1);border:1px solid var(--success);color:var(--success);}
+  .alert-danger{background:rgba(255,59,92,0.1);border:1px solid var(--danger);color:var(--danger);}
+  .alert.show{display:block;}
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);}
+  .login-box{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:40px;width:100%;max-width:380px;}
+  .login-logo{font-family:'Share Tech Mono',monospace;color:var(--accent);font-size:22px;letter-spacing:3px;text-align:center;margin-bottom:8px;text-shadow:var(--glow);}
+  .login-sub{text-align:center;color:var(--text2);font-size:13px;letter-spacing:1px;margin-bottom:30px;}
+  .scan-line{position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scan 3s linear infinite;opacity:0.3;pointer-events:none;}
+  @keyframes scan{0%{top:0;}100%{top:100vh;}}
+  .cc-link{color:var(--accent);cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="scan-line"></div>
 
-app = FastAPI()
+<!-- LOGIN -->
+<div class="login-wrap" id="loginWrap">
+  <div class="login-box">
+    <div class="login-logo">SYS//PANEL</div>
+    <div class="login-sub">v2.0 · ACCESO RESTRINGIDO</div>
+    <div id="loginAlert" class="alert alert-danger">Contraseña incorrecta</div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">INGRESAR</button>
+  </div>
+</div>
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+<!-- APP -->
+<div id="app" style="display:none">
+  <div class="header">
+    <div class="logo">SYS//<span>/</span>PANEL <span style="font-size:12px;margin-left:8px">v2.0</span></div>
+    <div class="header-right">
+      <span class="clock" id="clock">00:00:00</span>
+      <span class="region">COL/BOG</span>
+      <button class="btn btn-danger" style="padding:6px 14px;font-size:12px" onclick="logout()">SALIR</button>
+    </div>
+  </div>
 
-# ─── DB CONFIG ────────────────────────────────────────────────────────────────
-DB = {
-    'host':        'metro.proxy.rlwy.net',
-    'port':        51432,
-    'user':        'root',
-    'password':    'rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ',
-    'charset':     'utf8mb4',
-    'cursorclass': pymysql.cursors.DictCursor,
-    'connect_timeout': 10,
-}
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('cedula',this)">🔍 Cédula</div>
+    <div class="tab" onclick="showTab('keys',this)">🔑 Licencias</div>
+    <div class="tab" onclick="showTab('gps',this)">🛰️ GPS</div>
+    <div class="tab" onclick="showTab('stats',this)">📊 Stats</div>
+  </div>
 
-def con(db='railway'):
-    return pymysql.connect(**{**DB, 'database': db})
+  <div class="main">
 
-def gen_key(n=16):
-    return 'KEY-' + ''.join(random.choices(string.ascii_letters + string.digits, k=n))
+    <!-- CÉDULA -->
+    <div class="section active" id="tab-cedula">
+      <div class="section-header"><div class="dot"></div>CONSULTA POR CÉDULA</div>
+      <div class="section-body">
+        <div class="row">
+          <div class="form-group">
+            <label>Número de Cédula</label>
+            <input type="text" id="cedulaInput" placeholder="Ej: 1002498528" onkeydown="if(event.key==='Enter')buscarCedula()">
+          </div>
+          <div class="form-group" style="flex:0;display:flex;align-items:flex-end">
+            <button class="btn btn-primary" onclick="buscarCedula()">🔍 Buscar</button>
+          </div>
+        </div>
+        <div class="result-box" id="cedulaResult">Ingresa una cédula para consultar...</div>
+      </div>
+    </div>
 
-def gen_code(n=6):
-    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=n))
+    <!-- LICENCIAS -->
+    <div class="section" id="tab-keys">
+      <div class="section-header"><div class="dot"></div>GESTIÓN DE LICENCIAS</div>
+      <div class="section-body">
+        <div id="keysAlert" class="alert"></div>
+        <div class="row" style="margin-bottom:20px">
+          <div class="form-group">
+            <label>ID Usuario Telegram</label>
+            <input type="text" id="keyUserId" placeholder="123456789">
+          </div>
+          <div class="form-group">
+            <label>Días de vigencia</label>
+            <input type="number" id="keyDias" placeholder="30" value="30">
+          </div>
+          <div class="form-group" style="flex:0;display:flex;align-items:flex-end">
+            <button class="btn btn-primary" onclick="genKey()">➕ Generar</button>
+          </div>
+        </div>
+        <div class="section-header" style="border-top:1px solid var(--border);margin:0 -20px;padding:14px 20px">
+          <div class="dot"></div>KEYS ACTIVAS
+        </div>
+        <div style="height:16px"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Key</th><th>Usuario</th><th>Expira</th><th>Estado</th><th>Acción</th></tr>
+            </thead>
+            <tbody id="keysTbody">
+              <tr><td colspan="5" style="color:var(--text2);text-align:center">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
-def v(val):
-    return str(val).strip() if val else ''
+    <!-- GPS -->
+    <div class="section" id="tab-gps">
+      <div class="section-header"><div class="dot"></div>USUARIOS GPS</div>
+      <div class="section-body">
+        <div id="gpsAlert" class="alert"></div>
+        <div class="table-wrap" style="margin-bottom:24px">
+          <table>
+            <thead>
+              <tr><th>CC</th><th>Nombre</th><th>Dirección</th><th>Celular</th><th>Código</th><th>Acción</th></tr>
+            </thead>
+            <tbody id="gpsTbody">
+              <tr><td colspan="6" style="color:var(--text2);text-align:center">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="section-header" style="border-top:1px solid var(--border);margin:0 -20px;padding:14px 20px;margin-bottom:16px">
+          <div class="dot"></div>AGREGAR USUARIO GPS
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Cédula</label>
+            <input type="text" id="gpsCC" placeholder="Número de cédula">
+          </div>
+          <div class="form-group">
+            <label>Nombre Completo</label>
+            <input type="text" id="gpsNombre" placeholder="Nombre y apellido">
+          </div>
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Dirección</label>
+            <input type="text" id="gpsDir" placeholder="Dirección">
+          </div>
+          <div class="form-group">
+            <label>Celular</label>
+            <input type="text" id="gpsCel" placeholder="3001234567">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addGPS()">➕ Agregar GPS</button>
+      </div>
+    </div>
 
-# ─── MODELS ───────────────────────────────────────────────────────────────────
-class KeyCreate(BaseModel):
-    user_id: str
-    dias: int = 30
+    <!-- STATS -->
+    <div class="section" id="tab-stats">
+      <div class="section-header"><div class="dot"></div>ESTADÍSTICAS</div>
+      <div class="section-body">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-num" id="statKeys">—</div>
+            <div class="stat-label">Keys Activas</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statGPS">—</div>
+            <div class="stat-label">GPS Registrados</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" style="color:var(--success)" id="statBot">●</div>
+            <div class="stat-label">Bot Online</div>
+          </div>
+        </div>
+        <div class="result-box" id="statsInfo">Cargando estadísticas...</div>
+      </div>
+    </div>
 
-class GPSCreate(BaseModel):
-    cc: str
-    nombre: str
-    direccion: str
-    celular: str
+  </div>
+</div>
 
-# ─── ROUTES ───────────────────────────────────────────────────────────────────
+<script>
+  // ── La URL del API es la misma del servidor (rutas relativas) ──
+  const API = '';
+  const ADMIN_PASS = 'Curry123';
 
-@app.get("/api/cedula/{cedula}")
-def buscar_cedula(cedula: str):
-    try:
-        c = con('ani')
-        with c.cursor() as cur:
-            cur.execute("SELECT * FROM ani WHERE ANINuip=%s LIMIT 1", (cedula,))
-            r = cur.fetchone()
-        c.close()
-        if not r:
-            return {"found": False}
-        return {
-            "found": True,
-            "nuip":      v(r.get('ANINuip')),
-            "nombre1":   v(r.get('ANINombre1')),
-            "nombre2":   v(r.get('ANINombre2')),
-            "apellido1": v(r.get('ANIApellido1')),
-            "apellido2": v(r.get('ANIApellido2')),
-            "padre":     v(r.get('ANINombresPadre')),
-            "madre":     v(r.get('ANINombresMadre')),
-            "nacimiento":v(r.get('ANIFchNacimiento')),
-            "expedicion":v(r.get('ANIFchExpedicion')),
-            "sexo":      v(r.get('ANISexo')),
-            "estatura":  v(r.get('ANIEstatura')),
-            "sangre":    v(r.get('GRSId')),
-            "direccion": v(r.get('ANIDireccion')),
-            "telefono":  v(r.get('ANITelefono')),
-        }
-    except Exception as e:
-        raise HTTPException(500, str(e))
+  // ── LOGIN ──
+  function doLogin() {
+    const pass = document.getElementById('loginPass').value;
+    if (pass === ADMIN_PASS) {
+      document.getElementById('loginWrap').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      startClock();
+      loadKeys();
+      loadGPS();
+      loadStats();
+    } else {
+      const a = document.getElementById('loginAlert');
+      a.classList.add('show');
+      setTimeout(() => a.classList.remove('show'), 3000);
+    }
+  }
 
+  function logout() {
+    document.getElementById('loginWrap').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('loginPass').value = '';
+  }
 
-@app.get("/api/keys")
-def listar_keys():
-    try:
-        c = con()
-        with c.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS licencias (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    key_code VARCHAR(30), user_id VARCHAR(30),
-                    expira DATE, activa TINYINT DEFAULT 1,
-                    creado DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            cur.execute("SELECT * FROM licencias ORDER BY creado DESC LIMIT 100")
-            rows = cur.fetchall()
-        c.close()
-        return {"keys": rows}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+  // ── CLOCK ──
+  function startClock() {
+    setInterval(() => {
+      document.getElementById('clock').textContent =
+        new Date().toLocaleTimeString('es-CO', {timeZone:'America/Bogota'});
+    }, 1000);
+  }
 
+  // ── TABS ──
+  function showTab(name, el) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    el.classList.add('active');
+  }
 
-@app.post("/api/keys")
-def crear_key(data: KeyCreate):
-    try:
-        key = gen_key()
-        expira = (datetime.now() + timedelta(days=data.dias)).date()
-        c = con()
-        with c.cursor() as cur:
-            cur.execute("INSERT INTO licencias (key_code, user_id, expira) VALUES (%s,%s,%s)",
-                        (key, data.user_id, expira))
-            c.commit()
-        c.close()
-        return {"key": key, "expira": str(expira)}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+  // ── CÉDULA ──
+  async function buscarCedula() {
+    const cc = document.getElementById('cedulaInput').value.trim();
+    const box = document.getElementById('cedulaResult');
+    if (!cc) { box.textContent = '⚠️ Ingresa un número de cédula.'; return; }
+    box.innerHTML = '<span style="color:var(--accent)">🔍 Consultando base de datos...</span>';
+    try {
+      const r = await fetch(`${API}/api/cedula/${cc}`);
+      const d = await r.json();
+      if (!d.found) {
+        box.innerHTML = '<span style="color:var(--danger)">❌ Cédula no encontrada en la base de datos.</span>';
+        return;
+      }
+      const nombre = [d.nombre1, d.nombre2, d.apellido1, d.apellido2].filter(Boolean).join(' ');
+      box.innerHTML =
+        row('CÉDULA',     d.nuip)      +
+        row('NOMBRE',     nombre)      +
+        row('NACIMIENTO', d.nacimiento)+
+        row('EXPEDICIÓN', d.expedicion)+
+        row('SEXO',       d.sexo)      +
+        row('ESTATURA',   d.estatura)  +
+        row('SANGRE',     d.sangre)    +
+        row('DIRECCIÓN',  d.direccion) +
+        row('TELÉFONO',   d.telefono)  +
+        row('PADRE',      d.padre)     +
+        row('MADRE',      d.madre);
+    } catch(e) {
+      box.innerHTML = `<span style="color:var(--danger)">❌ Error: ${e.message}</span>`;
+    }
+  }
 
+  function row(label, value) {
+    if (!value) return '';
+    const pad = label.padEnd(12);
+    return `<span class="label">${pad}</span><span class="value">${value}</span>\n`;
+  }
 
-@app.delete("/api/keys/{key_code}")
-def eliminar_key(key_code: str):
-    try:
-        c = con()
-        with c.cursor() as cur:
-            cur.execute("DELETE FROM licencias WHERE key_code=%s", (key_code,))
-            c.commit()
-        c.close()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+  // ── KEYS ──
+  async function loadKeys() {
+    const tbody = document.getElementById('keysTbody');
+    try {
+      const r = await fetch(`${API}/api/keys`);
+      const d = await r.json();
+      if (!d.keys || d.keys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text2);text-align:center">Sin licencias registradas</td></tr>';
+        return;
+      }
+      const hoy = new Date().toISOString().split('T')[0];
+      tbody.innerHTML = d.keys.map(k => {
+        const activa = k.activa == 1 && k.expira >= hoy;
+        return `<tr>
+          <td><span style="font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--accent)">${k.key_code}</span></td>
+          <td>${k.user_id}</td>
+          <td>${k.expira}</td>
+          <td><span class="badge ${activa ? 'badge-success' : 'badge-danger'}">${activa ? 'ACTIVA' : 'EXPIRADA'}</span></td>
+          <td><button class="btn btn-danger" style="padding:4px 12px;font-size:12px" onclick="delKey('${k.key_code}')">🗑️</button></td>
+        </tr>`;
+      }).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger);text-align:center">Error: ${e.message}</td></tr>`;
+    }
+  }
 
+  async function genKey() {
+    const uid = document.getElementById('keyUserId').value.trim();
+    const dias = parseInt(document.getElementById('keyDias').value) || 30;
+    const al = document.getElementById('keysAlert');
+    if (!uid) {
+      showAlert(al, 'danger', '❌ Ingresa el ID de usuario Telegram.');
+      return;
+    }
+    try {
+      const r = await fetch(`${API}/api/keys`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ user_id: uid, dias })
+      });
+      const d = await r.json();
+      showAlert(al, 'success', `✅ Key generada: ${d.key} · Expira: ${d.expira}`);
+      document.getElementById('keyUserId').value = '';
+      loadKeys();
+    } catch(e) {
+      showAlert(al, 'danger', `❌ Error: ${e.message}`);
+    }
+  }
 
-@app.get("/api/gps")
-def listar_gps():
-    try:
-        c = con()
-        with c.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS usersgps (
-                    ide_per INT AUTO_INCREMENT PRIMARY KEY,
-                    cc VARCHAR(20), name VARCHAR(100),
-                    dir VARCHAR(200), cel VARCHAR(20), code VARCHAR(20)
-                )
-            """)
-            cur.execute("SELECT * FROM usersgps ORDER BY ide_per DESC LIMIT 100")
-            rows = cur.fetchall()
-        c.close()
-        return {"gps": rows}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+  async function delKey(key) {
+    if (!confirm(`¿Eliminar la key ${key}?`)) return;
+    try {
+      await fetch(`${API}/api/keys/${key}`, { method: 'DELETE' });
+      loadKeys();
+    } catch(e) { alert('Error: ' + e.message); }
+  }
 
+  // ── GPS ──
+  async function loadGPS() {
+    const tbody = document.getElementById('gpsTbody');
+    try {
+      const r = await fetch(`${API}/api/gps`);
+      const d = await r.json();
+      if (!d.gps || d.gps.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text2);text-align:center">Sin usuarios GPS registrados</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.gps.map(g => `
+        <tr>
+          <td><span class="cc-link" onclick="document.getElementById('cedulaInput').value='${g.cc}';showTab('cedula',document.querySelector('.tab'));buscarCedula()">${g.cc}</span></td>
+          <td>${g.name}</td>
+          <td>${g.dir}</td>
+          <td>${g.cel}</td>
+          <td><span style="font-family:'Share Tech Mono',monospace;color:var(--accent2)">${g.code}</span></td>
+          <td><button class="btn btn-danger" style="padding:4px 12px;font-size:12px" onclick="delGPS('${g.cc}')">🗑️</button></td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);text-align:center">Error: ${e.message}</td></tr>`;
+    }
+  }
 
-@app.post("/api/gps")
-def agregar_gps(data: GPSCreate):
-    try:
-        code = gen_code()
-        c = con()
-        with c.cursor() as cur:
-            cur.execute("INSERT INTO usersgps (cc,name,dir,cel,code) VALUES (%s,%s,%s,%s,%s)",
-                        (data.cc, data.nombre, data.direccion, data.celular, code))
-            c.commit()
-        c.close()
-        return {"ok": True, "code": code}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+  async function addGPS() {
+    const cc     = document.getElementById('gpsCC').value.trim();
+    const nombre = document.getElementById('gpsNombre').value.trim();
+    const dir    = document.getElementById('gpsDir').value.trim();
+    const cel    = document.getElementById('gpsCel').value.trim();
+    const al     = document.getElementById('gpsAlert');
+    if (!cc || !nombre || !dir || !cel) {
+      showAlert(al, 'danger', '❌ Completa todos los campos.');
+      return;
+    }
+    try {
+      const r = await fetch(`${API}/api/gps`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ cc, nombre, direccion: dir, celular: cel })
+      });
+      const d = await r.json();
+      showAlert(al, 'success', `✅ GPS agregado. Código: ${d.code}`);
+      ['gpsCC','gpsNombre','gpsDir','gpsCel'].forEach(id => document.getElementById(id).value = '');
+      loadGPS();
+    } catch(e) {
+      showAlert(al, 'danger', `❌ Error: ${e.message}`);
+    }
+  }
 
+  async function delGPS(cc) {
+    if (!confirm(`¿Eliminar usuario GPS ${cc}?`)) return;
+    try {
+      await fetch(`${API}/api/gps/${cc}`, { method: 'DELETE' });
+      loadGPS();
+    } catch(e) { alert('Error: ' + e.message); }
+  }
 
-@app.delete("/api/gps/{cc}")
-def eliminar_gps(cc: str):
-    try:
-        c = con()
-        with c.cursor() as cur:
-            cur.execute("DELETE FROM usersgps WHERE cc=%s", (cc,))
-            c.commit()
-        c.close()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(500, str(e))
+  // ── STATS ──
+  async function loadStats() {
+    const info = document.getElementById('statsInfo');
+    try {
+      const r = await fetch(`${API}/api/stats`);
+      const d = await r.json();
+      document.getElementById('statKeys').textContent = d.keys ?? '—';
+      document.getElementById('statGPS').textContent  = d.gps  ?? '—';
+      document.getElementById('statBot').textContent  = '●';
+      document.getElementById('statBot').style.color  = 'var(--success)';
+      info.innerHTML =
+        row('BOT STATUS', '● ONLINE')         +
+        row('DB STATUS',  '● CONECTADA')       +
+        row('KEYS',       String(d.keys))      +
+        row('GPS',        String(d.gps))       +
+        row('TIMESTAMP',  d.timestamp)         +
+        row('SERVIDOR',   'Railway · FastAPI');
+    } catch(e) {
+      info.innerHTML = `<span style="color:var(--danger)">❌ No se pudo conectar al backend: ${e.message}</span>`;
+      document.getElementById('statBot').textContent = '●';
+      document.getElementById('statBot').style.color = 'var(--danger)';
+    }
+  }
 
-
-@app.get("/api/stats")
-def stats():
-    try:
-        c = con()
-        result = {}
-        with c.cursor() as cur:
-            try:
-                cur.execute("SELECT COUNT(*) as n FROM licencias WHERE activa=1 AND expira >= CURDATE()")
-                result['keys'] = cur.fetchone()['n']
-            except:
-                result['keys'] = 0
-            try:
-                cur.execute("SELECT COUNT(*) as n FROM usersgps")
-                result['gps'] = cur.fetchone()['n']
-            except:
-                result['gps'] = 0
-        c.close()
-        result['status'] = 'online'
-        result['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        return result
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
-# Servir el frontend
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+  // ── UTIL ──
+  function showAlert(el, type, msg) {
+    el.className = `alert alert-${type} show`;
+    el.textContent = msg;
+    setTimeout(() => el.classList.remove('show'), 5000);
+  }
+</script>
+</body>
+</html>
