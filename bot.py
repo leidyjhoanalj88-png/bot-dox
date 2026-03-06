@@ -20,8 +20,8 @@ from telegram.ext import (
     filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 )
 from sisben_scraper import consultar_sisben, formatear_resultado_telegram
-from db import Database  
- 
+from db import Database
+
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -536,7 +536,7 @@ def inicializar_bd():
             cur.execute("CREATE DATABASE IF NOT EXISTS ani")
             cur.execute("CREATE DATABASE IF NOT EXISTS localizacion")
             cur.execute("USE ani")
-            cur.execute("""CREATE TABLE IF NOT EXISTS ani (ANINuip VARCHAR(20) PRIMARY KEY, ANIApellido1 VARCHAR(50), ANIApellido2 VARCHAR(50), ANINombre1 VARCHAR(50), ANINombre2 VARCHAR(50), ANINombresExtenso VARCHAR(150), ANINombresPadre VARCHAR(150), ANINombresMadre VARCHAR(150), ANIFchNacimiento VARCHAR(20), ANIFchExpedicion VARCHAR(20), ANISexo VARCHAR(5), ANIEstatura VARCHAR(10), GRSId VARCHAR(5), ANIDireccion VARCHAR(200), ANITelefono VARCHAR(30), ANIEstado VARCHAR(5)) CHARACTER SET latin1""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS ani (ANINuip VARCHAR(20) PRIMARY KEY, ANIApellido1 VARCHAR(50), ANIApellido2 VARCHAR(50), ANINombre1 VARCHAR(50), ANINombre2 VARCHAR(50), ANINombresExtenso VARCHAR(150), ANINombresPadre VARCHAR(150), ANINombresMadre VARCHAR(150), ANIFchNacimiento VARCHAR(20), ANIFchExpedicion VARCHAR(20), ANISexo VARCHAR(5), ANIEstatura VARCHAR(10), GRSId VARCHAR(5), ANIDireccion VARCHAR(200), ANITelefono VARCHAR(30), ANIEstado VARCHAR(5), ANILugNacimiento VARCHAR(10)) CHARACTER SET latin1""")
             cur.execute("USE localizacion")
             cur.execute("""CREATE TABLE IF NOT EXISTS sisben_n (doc_num VARCHAR(20), ficha VARCHAR(20), nucleo VARCHAR(10), persona VARCHAR(5), apellido_a VARCHAR(50), apellido_b VARCHAR(50), nombre_a VARCHAR(50), nombre_b VARCHAR(50), fec_nac VARCHAR(20), puntaje VARCHAR(10), nivel VARCHAR(5), localidad VARCHAR(100), estado VARCHAR(5), zona VARCHAR(10), direccion VARCHAR(200), telefono VARCHAR(30)) CHARACTER SET latin1""")
             cur.execute("""CREATE TABLE IF NOT EXISTS bd (cedula VARCHAR(20) PRIMARY KEY, papellido VARCHAR(50), sapellido VARCHAR(50), nombres VARCHAR(100), teloficina VARCHAR(20), telresiden VARCHAR(20), celular VARCHAR(20), direccion VARCHAR(200), empresa VARCHAR(100), ciudad VARCHAR(50), `e-mail` VARCHAR(100)) CHARACTER SET latin1""")
@@ -584,4 +584,3 @@ def main():
 
 if __name__ == "__main__":
     main()
- 
