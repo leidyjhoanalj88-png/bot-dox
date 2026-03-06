@@ -20,6 +20,7 @@ from telegram.ext import (
     filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 )
 from sisben_scraper import consultar_sisben, formatear_resultado_telegram
+from database import Database
 
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -60,16 +61,15 @@ GPS_CONFIG = {
     'write_timeout':   15,
 }
 
-# ─── ESTADOS ──────────────────────────────────────────────────────────────────
 (MENU_PRINCIPAL, ESPERANDO_CEDULA,
  ESPERANDO_NOMBRE, ESPERANDO_APELLIDO, MENU_GPS,
  GPS_CC, GPS_NAME, GPS_DIR, GPS_CEL,
  SISBEN_TIPO_DOC, SISBEN_NUM_DOC) = range(11)
 
-# ─── USUARIOS APROBADOS EN MEMORIA ────────────────────────────────────────────
 USUARIOS_APROBADOS = set()
 
-# ─── TECLADOS ─────────────────────────────────────────────────────────────────
+db = Database()
+
 TECLADO_MENU = ReplyKeyboardMarkup([
     ["🔍 Buscar por Cédula",  "👤 Buscar por Nombre"],
     ["🏠 Núcleo Familiar",    "📡 Consulta SISBEN"],
@@ -98,7 +98,6 @@ MAPA_TIPO_DOC = {
     "9️⃣ Permiso Protección (PPT)": "9",
 }
 
-# ─── HELPERS ──────────────────────────────────────────────────────────────────
 def _con(db=None):
     config = dict(DB_CONFIG)
     if db:
@@ -117,105 +116,50 @@ def esta_aprobado(user_id):
         return True
     return user_id in USUARIOS_APROBADOS
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  INICIO — Solicitud de acceso
-# ═══════════════════════════════════════════════════════════════════════════════
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id  = update.effective_user.id
     username = update.effective_user.username or "sin_usuario"
     nombre   = update.effective_user.first_name or "Usuario"
-
     if es_admin(user_id):
-        await update.message.reply_text(
-            f"👑 *Bienvenido Admin!*\n\nSelecciona una opción:",
-            parse_mode="Markdown", reply_markup=TECLADO_MENU
-        )
+        await update.message.reply_text(f"👑 *Bienvenido Admin!*\n\nSelecciona una opción:", parse_mode="Markdown", reply_markup=TECLADO_MENU)
         return MENU_PRINCIPAL
-
     if esta_aprobado(user_id):
-        await update.message.reply_text(
-            f"✅ *Bienvenido, {nombre}!*\n\nSelecciona una opción:",
-            parse_mode="Markdown", reply_markup=TECLADO_MENU
-        )
+        await update.message.reply_text(f"✅ *Bienvenido, {nombre}!*\n\nSelecciona una opción:", parse_mode="Markdown", reply_markup=TECLADO_MENU)
         return MENU_PRINCIPAL
-
-    await update.message.reply_text(
-        f"👋 Hola *{nombre}*!\n\n"
-        f"⏳ Tu solicitud de acceso fue enviada al administrador.\n"
-        f"Espera la aprobación para continuar.",
-        parse_mode="Markdown"
-    )
-
+    await update.message.reply_text(f"👋 Hola *{nombre}*!\n\n⏳ Tu solicitud de acceso fue enviada al administrador.\nEspera la aprobación para continuar.", parse_mode="Markdown")
     for admin_id in ADMIN_IDS:
         try:
-            keyboard = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("✅ Aprobar", callback_data=f"aprobar_{user_id}"),
-                    InlineKeyboardButton("❌ Rechazar", callback_data=f"rechazar_{user_id}")
-                ]
-            ])
-            await context.bot.send_message(
-                chat_id=admin_id,
-                text=(
-                    f"🔔 *Nueva solicitud de acceso*\n\n"
-                    f"👤 Nombre: *{nombre}*\n"
-                    f"🆔 ID: `{user_id}`\n"
-                    f"📛 Usuario: @{username}"
-                ),
-                parse_mode="Markdown",
-                reply_markup=keyboard
-            )
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Aprobar", callback_data=f"aprobar_{user_id}"), InlineKeyboardButton("❌ Rechazar", callback_data=f"rechazar_{user_id}")]])
+            await context.bot.send_message(chat_id=admin_id, text=f"🔔 *Nueva solicitud de acceso*\n\n👤 Nombre: *{nombre}*\n🆔 ID: `{user_id}`\n📛 Usuario: @{username}", parse_mode="Markdown", reply_markup=keyboard)
         except Exception as e:
             logger.error(f"Error notificando admin {admin_id}: {e}")
-
     return ConversationHandler.END
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  CALLBACK — Admin aprueba o rechaza
-# ═══════════════════════════════════════════════════════════════════════════════
 async def callback_aprobacion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query    = update.callback_query
     admin_id = query.from_user.id
-
     if not es_admin(admin_id):
         await query.answer("🚫 No tienes permisos.")
         return
-
     data   = query.data
     accion, uid = data.split("_", 1)
     uid = int(uid)
-
     if accion == "aprobar":
         USUARIOS_APROBADOS.add(uid)
         await query.edit_message_text(f"✅ Usuario `{uid}` *aprobado*.", parse_mode="Markdown")
         try:
-            await context.bot.send_message(
-                chat_id=uid,
-                text="✅ *¡Acceso aprobado!*\n\nUsa /start para entrar al bot.",
-                parse_mode="Markdown"
-            )
+            await context.bot.send_message(chat_id=uid, text="✅ *¡Acceso aprobado!*\n\nUsa /start para entrar al bot.", parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Error notificando usuario {uid}: {e}")
-
     elif accion == "rechazar":
         USUARIOS_APROBADOS.discard(uid)
         await query.edit_message_text(f"❌ Usuario `{uid}` *rechazado*.", parse_mode="Markdown")
         try:
-            await context.bot.send_message(
-                chat_id=uid,
-                text="❌ Tu solicitud de acceso fue *rechazada*.\n\nContacta al administrador.",
-                parse_mode="Markdown"
-            )
+            await context.bot.send_message(chat_id=uid, text="❌ Tu solicitud de acceso fue *rechazada*.\n\nContacta al administrador.", parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Error notificando usuario {uid}: {e}")
-
     await query.answer()
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  COMANDOS ADMIN
-# ═══════════════════════════════════════════════════════════════════════════════
 async def cmd_usuarios(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not es_admin(user_id):
@@ -228,7 +172,6 @@ async def cmd_usuarios(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for uid in USUARIOS_APROBADOS:
         msg += f"🆔 `{uid}`\n"
     await update.message.reply_text(msg, parse_mode="Markdown")
-
 
 async def cmd_revocar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -249,27 +192,12 @@ async def cmd_revocar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("❌ ID inválido.")
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  COMANDOS GENERALES
-# ═══════════════════════════════════════════════════════════════════════════════
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    msg = (
-        "<b>📚 Comandos disponibles</b>\n\n"
-        "<b>/start</b> — Iniciar / Solicitar acceso\n"
-        "<b>/cc CEDULA</b> — Buscar por cédula\n"
-        "<b>/nombres NOMBRE AP1 AP2</b> — Buscar por nombre\n"
-        "<b>/help</b> — Ver esta ayuda\n"
-    )
+    msg = "<b>📚 Comandos disponibles</b>\n\n<b>/start</b> — Iniciar / Solicitar acceso\n<b>/cc CEDULA</b> — Buscar por cédula\n<b>/nombres NOMBRE AP1 AP2</b> — Buscar por nombre\n<b>/help</b> — Ver esta ayuda\n"
     if es_admin(user_id):
-        msg += (
-            "\n<b>👑 Comandos Admin:</b>\n"
-            "<b>/usuarios</b> — Ver usuarios aprobados\n"
-            "<b>/revocar ID</b> — Revocar acceso a un usuario\n"
-        )
+        msg += "\n<b>👑 Comandos Admin:</b>\n<b>/usuarios</b> — Ver usuarios aprobados\n<b>/revocar ID</b> — Revocar acceso a un usuario\n"
     await update.message.reply_text(msg, parse_mode="HTML")
-
 
 async def cmd_cc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -288,6 +216,7 @@ async def cmd_cc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cur.execute("SELECT * FROM ani WHERE ANINuip=%s LIMIT 1", (cedula,))
             r = cur.fetchone()
         if r:
+            lugar = db.get_municipio(r.get('ANILugNacimiento', ''))
             msg = (
                 f"✅ *Datos del Ciudadano*\n\n"
                 f"📋 `{v(r.get('ANINuip'))}`\n"
@@ -299,6 +228,8 @@ async def cmd_cc(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📍 {v(r.get('ANIDireccion'))}\n"
                 f"📞 {v(r.get('ANITelefono'))}\n"
             )
+            if lugar:
+                msg += f"🏠 Nació en: *{lugar}*\n"
         else:
             msg = f"⚠️ No se encontró la cédula `{cedula}`."
     except Exception as e:
@@ -306,7 +237,6 @@ async def cmd_cc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         if con: con.close()
     await update.message.reply_text(msg, parse_mode="Markdown")
-
 
 async def cmd_nombres(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -344,16 +274,12 @@ async def cmd_nombres(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if con: con.close()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  MENÚ PRINCIPAL
-# ═══════════════════════════════════════════════════════════════════════════════
 async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not esta_aprobado(user_id):
         await update.message.reply_text("🔐 Sin acceso. Usa /start para solicitar acceso.")
         return ConversationHandler.END
     texto = update.message.text
-
     if texto == "🔍 Buscar por Cédula":
         context.user_data['modo'] = 'cedula'
         await update.message.reply_text("📄 Ingresa el número de cédula:", reply_markup=ReplyKeyboardRemove())
@@ -385,13 +311,9 @@ async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif texto == "🚪 Salir":
         await update.message.reply_text("👋 Hasta luego!", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
-
     await update.message.reply_text("Selecciona una opción:", reply_markup=TECLADO_MENU)
     return MENU_PRINCIPAL
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  BÚSQUEDAS
-# ═══════════════════════════════════════════════════════════════════════════════
 async def buscar_cedula(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cedula = update.message.text.strip()
     modo   = context.user_data.get('modo', 'cedula')
@@ -459,6 +381,7 @@ async def buscar_cedula(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 r = cur.fetchone()
             con.close()
             if r:
+                lugar = db.get_municipio(r.get('ANILugNacimiento', ''))
                 msg = (
                     f"✅ *Datos del Ciudadano*\n\n"
                     f"📋 `{v(r.get('ANINuip'))}`\n"
@@ -470,22 +393,21 @@ async def buscar_cedula(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"📍 {v(r.get('ANIDireccion'))}\n"
                     f"📞 {v(r.get('ANITelefono'))}\n"
                 )
+                if lugar:
+                    msg += f"🏠 Nació en: *{lugar}*\n"
             else:
                 msg = f"⚠️ No se encontró la cédula `{cedula}`."
     except Exception as e:
         logger.error(f"buscar_cedula: {e}")
         msg = f"❌ Error: `{e}`"
-
     context.user_data['modo'] = 'cedula'
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=TECLADO_MENU)
     return MENU_PRINCIPAL
-
 
 async def buscar_nombre(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['nombre1'] = update.message.text.strip().upper()
     await update.message.reply_text("📝 Ingresa el *primer apellido*:", parse_mode="Markdown")
     return ESPERANDO_APELLIDO
-
 
 async def buscar_apellido(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nombre1 = context.user_data.get('nombre1', '')
@@ -511,9 +433,6 @@ async def buscar_apellido(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=TECLADO_MENU)
     return MENU_PRINCIPAL
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  SISBEN
-# ═══════════════════════════════════════════════════════════════════════════════
 async def sisben_tipo_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text
     if texto == "🔙 Volver al Menú":
@@ -527,7 +446,6 @@ async def sisben_tipo_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Tipo: *{texto}*\n\nIngresa el número:", parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
     return SISBEN_NUM_DOC
 
-
 async def sisben_num_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     numero = update.message.text.strip()
     tipo   = context.user_data.get('sisben_tipo', '3')
@@ -537,9 +455,6 @@ async def sisben_num_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=TECLADO_MENU)
     return MENU_PRINCIPAL
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  GPS
-# ═══════════════════════════════════════════════════════════════════════════════
 async def menu_gps(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text
     if texto == "📋 Listar GPS":
@@ -565,7 +480,6 @@ async def menu_gps(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Menú:", reply_markup=TECLADO_MENU)
         return MENU_PRINCIPAL
     return MENU_GPS
-
 
 async def gps_cc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cc = update.message.text.strip()
@@ -602,9 +516,7 @@ async def gps_cel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         con = _con_gps()
         with con.cursor() as cur:
-            cur.execute("INSERT INTO usersgps (cc,name,dir,cel,code) VALUES (%s,%s,%s,%s,%s)",
-                        (context.user_data['gps_cc'], context.user_data['gps_name'],
-                         context.user_data['gps_dir'], context.user_data['gps_cel'], code))
+            cur.execute("INSERT INTO usersgps (cc,name,dir,cel,code) VALUES (%s,%s,%s,%s,%s)", (context.user_data['gps_cc'], context.user_data['gps_name'], context.user_data['gps_dir'], context.user_data['gps_cel'], code))
             con.commit()
         con.close()
         msg = f"✅ *GPS agregado*\n\nCC: `{context.user_data['gps_cc']}`\n👤 {context.user_data['gps_name']}\n🔑 `{code}`"
@@ -613,60 +525,25 @@ async def gps_cel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=TECLADO_GPS)
     return MENU_GPS
 
-
 async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Cancelado.", reply_markup=TECLADO_MENU)
     return MENU_PRINCIPAL
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  MAIN
-# ═══════════════════════════════════════════════════════════════════════════════
 def inicializar_bd():
     try:
-        con = pymysql.connect(
-            host='metro.proxy.rlwy.net', port=51432,
-            user='root', password='rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ',
-            charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor, connect_timeout=10,
-        )
+        con = pymysql.connect(host='metro.proxy.rlwy.net', port=51432, user='root', password='rIWnZxNXgktqOaJEXrPVcCyXENRmpLfQ', charset='utf8mb4', cursorclass=pymysql.cursors.DictCursor, connect_timeout=10)
         with con.cursor() as cur:
             cur.execute("CREATE DATABASE IF NOT EXISTS ani")
             cur.execute("CREATE DATABASE IF NOT EXISTS localizacion")
             cur.execute("USE ani")
-            cur.execute("""CREATE TABLE IF NOT EXISTS ani (
-                ANINuip VARCHAR(20) PRIMARY KEY, ANIApellido1 VARCHAR(50), ANIApellido2 VARCHAR(50),
-                ANINombre1 VARCHAR(50), ANINombre2 VARCHAR(50), ANINombresExtenso VARCHAR(150),
-                ANINombresPadre VARCHAR(150), ANINombresMadre VARCHAR(150),
-                ANIFchNacimiento VARCHAR(20), ANIFchExpedicion VARCHAR(20),
-                ANISexo VARCHAR(5), ANIEstatura VARCHAR(10), GRSId VARCHAR(5),
-                ANIDireccion VARCHAR(200), ANITelefono VARCHAR(30), ANIEstado VARCHAR(5)
-            ) CHARACTER SET latin1""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS ani (ANINuip VARCHAR(20) PRIMARY KEY, ANIApellido1 VARCHAR(50), ANIApellido2 VARCHAR(50), ANINombre1 VARCHAR(50), ANINombre2 VARCHAR(50), ANINombresExtenso VARCHAR(150), ANINombresPadre VARCHAR(150), ANINombresMadre VARCHAR(150), ANIFchNacimiento VARCHAR(20), ANIFchExpedicion VARCHAR(20), ANISexo VARCHAR(5), ANIEstatura VARCHAR(10), GRSId VARCHAR(5), ANIDireccion VARCHAR(200), ANITelefono VARCHAR(30), ANIEstado VARCHAR(5)) CHARACTER SET latin1""")
             cur.execute("USE localizacion")
-            cur.execute("""CREATE TABLE IF NOT EXISTS sisben_n (
-                doc_num VARCHAR(20), ficha VARCHAR(20), nucleo VARCHAR(10), persona VARCHAR(5),
-                apellido_a VARCHAR(50), apellido_b VARCHAR(50), nombre_a VARCHAR(50), nombre_b VARCHAR(50),
-                fec_nac VARCHAR(20), puntaje VARCHAR(10), nivel VARCHAR(5),
-                localidad VARCHAR(100), estado VARCHAR(5), zona VARCHAR(10),
-                direccion VARCHAR(200), telefono VARCHAR(30)
-            ) CHARACTER SET latin1""")
-            cur.execute("""CREATE TABLE IF NOT EXISTS bd (
-                cedula VARCHAR(20) PRIMARY KEY, papellido VARCHAR(50), sapellido VARCHAR(50),
-                nombres VARCHAR(100), teloficina VARCHAR(20), telresiden VARCHAR(20),
-                celular VARCHAR(20), direccion VARCHAR(200), empresa VARCHAR(100),
-                ciudad VARCHAR(50), `e-mail` VARCHAR(100)
-            ) CHARACTER SET latin1""")
-            cur.execute("""CREATE TABLE IF NOT EXISTS unifsisben (
-                DOC_NUM VARCHAR(20), FICHA VARCHAR(20), APELLIDO1 VARCHAR(50), APELLIDO2 VARCHAR(50),
-                NOMBRE VARCHAR(100), TELEFONO VARCHAR(20), CEL1 VARCHAR(20), CEL2 VARCHAR(20),
-                DIRECCION VARCHAR(200), CIUDAD VARCHAR(50)
-            ) CHARACTER SET latin1""")
-            cur.execute("""CREATE TABLE IF NOT EXISTS cedula_ficha (
-                cedula VARCHAR(20), ficha VARCHAR(20)
-            ) CHARACTER SET latin1""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS sisben_n (doc_num VARCHAR(20), ficha VARCHAR(20), nucleo VARCHAR(10), persona VARCHAR(5), apellido_a VARCHAR(50), apellido_b VARCHAR(50), nombre_a VARCHAR(50), nombre_b VARCHAR(50), fec_nac VARCHAR(20), puntaje VARCHAR(10), nivel VARCHAR(5), localidad VARCHAR(100), estado VARCHAR(5), zona VARCHAR(10), direccion VARCHAR(200), telefono VARCHAR(30)) CHARACTER SET latin1""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS bd (cedula VARCHAR(20) PRIMARY KEY, papellido VARCHAR(50), sapellido VARCHAR(50), nombres VARCHAR(100), teloficina VARCHAR(20), telresiden VARCHAR(20), celular VARCHAR(20), direccion VARCHAR(200), empresa VARCHAR(100), ciudad VARCHAR(50), `e-mail` VARCHAR(100)) CHARACTER SET latin1""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS unifsisben (DOC_NUM VARCHAR(20), FICHA VARCHAR(20), APELLIDO1 VARCHAR(50), APELLIDO2 VARCHAR(50), NOMBRE VARCHAR(100), TELEFONO VARCHAR(20), CEL1 VARCHAR(20), CEL2 VARCHAR(20), DIRECCION VARCHAR(200), CIUDAD VARCHAR(50)) CHARACTER SET latin1""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS cedula_ficha (cedula VARCHAR(20), ficha VARCHAR(20)) CHARACTER SET latin1""")
             cur.execute("USE railway")
-            cur.execute("""CREATE TABLE IF NOT EXISTS usersgps (
-                ide_per INT AUTO_INCREMENT PRIMARY KEY,
-                cc VARCHAR(20), name VARCHAR(100), dir VARCHAR(200), cel VARCHAR(20), code VARCHAR(20)
-            ) CHARACTER SET utf8mb4""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS usersgps (ide_per INT AUTO_INCREMENT PRIMARY KEY, cc VARCHAR(20), name VARCHAR(100), dir VARCHAR(200), cel VARCHAR(20), code VARCHAR(20)) CHARACTER SET utf8mb4""")
         con.commit()
         con.close()
         logger.info("✅ Bases de datos inicializadas.")
@@ -675,8 +552,8 @@ def inicializar_bd():
 
 def main():
     inicializar_bd()
+    db.setup_lug_ori()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -695,7 +572,6 @@ def main():
         fallbacks=[CommandHandler("cancel", cancelar)],
         allow_reentry=True
     )
-
     app.add_handler(conv)
     app.add_handler(CallbackQueryHandler(callback_aprobacion, pattern="^(aprobar|rechazar)_"))
     app.add_handler(CommandHandler("help",     cmd_help))
@@ -703,7 +579,6 @@ def main():
     app.add_handler(CommandHandler("nombres",  cmd_nombres))
     app.add_handler(CommandHandler("usuarios", cmd_usuarios))
     app.add_handler(CommandHandler("revocar",  cmd_revocar))
-
     logger.info("✅ BOT DOX iniciado...")
     app.run_polling(drop_pending_updates=True)
 
