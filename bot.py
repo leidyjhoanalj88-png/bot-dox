@@ -20,7 +20,7 @@ from telegram.ext import (
     filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 )
 from sisben_scraper import consultar_sisben, formatear_resultado_telegram
-from database import Database
+from db import Database  
  
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
