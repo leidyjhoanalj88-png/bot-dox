@@ -1141,13 +1141,29 @@ LUG_ORI_DATA = [
 
 class Database:
     def __init__(self):
-        self._cache = {row[0]: f"{row[1]} - {row[2]}" for row in LUG_ORI_DATA}
+        self._cache = {}
+        for row in LUG_ORI_DATA:
+            codigo, municipio, departamento = row
+            # Store with original code
+            self._cache[codigo] = f"{municipio} - {departamento}"
+            # Store with zero-padded 5-digit code
+            self._cache[codigo.zfill(5)] = f"{municipio} - {departamento}"
 
     def setup_lug_ori(self):
-        logger.info(f"✅ {len(self._cache)} municipios cargados en memoria.")
+        logger.info(f"✅ {len(LUG_ORI_DATA)} municipios cargados en memoria.")
 
     def get_municipio(self, codigo):
         if not codigo:
             return None
-        codigo = str(codigo).strip().zfill(5)
-        return self._cache.get(codigo)
+        codigo = str(codigo).strip()
+        # Try as-is first
+        result = self._cache.get(codigo)
+        if result:
+            return result
+        # Try zero-padded to 5 digits
+        result = self._cache.get(codigo.zfill(5))
+        if result:
+            return result
+        # Try without leading zeros
+        result = self._cache.get(codigo.lstrip('0'))
+        return result
