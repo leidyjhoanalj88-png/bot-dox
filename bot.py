@@ -21,7 +21,7 @@ from telegram.ext import (
 )
 from sisben_scraper import consultar_sisben, formatear_resultado_telegram
 from database import Database
-
+ 
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
